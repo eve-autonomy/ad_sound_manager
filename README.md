@@ -28,37 +28,7 @@ This node plays sound in the following order of priority.
     - `/sound_voice_alarm/audio_cmd` : Voice alarm playback request.
     - `/sound_bgm/audio_cmd` : BGM playback requst.
 ## Node Graph
-![image](https://user-images.githubusercontent.com/33311630/172429218-87798889-9d9f-454a-b244-fbacbdf9e612.png)
-
-<details>
-
-<summary> plantuml </summary>
-
-```
-
-@startuml
-rectangle "autoware" {
-  usecase "/awapi/awapi_awiv_adapter_node"
-}
-
-rectangle "eve oss" {
-  usecase "/autoware_state_machine"
-  usecase "/ad_sound_manager"
-  usecase "/sound_voice_alarm/audio_driver"
-  usecase "/sound_bgm/audio_driver"
-}
-
-(/awapi/awapi_awiv_adapter_node) --> (/ad_sound_manager) : /awapi/vehicle/get/status
-(/autoware_state_machine) -> (/ad_sound_manager) : /autoware_state_machine/state
-(/autoware_state_machine) <- (/ad_sound_manager) : /autoware_state_machine/state_sound_done
-(/ad_sound_manager) -> (/sound_voice_alarm/audio_driver) : /sound_voice_alarm/audio_cmd
-(/ad_sound_manager) <- (/sound_voice_alarm/audio_driver) : /sound_voice_alarm/audio_res
-(/ad_sound_manager) --> (/sound_bgm/audio_driver) : /sound_bgm/audio_cmd
-@enduml
-
-```
-  
-</details>
+![node graph](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/docs/node_graph.pu)
 
 ## Parameter discription
 
