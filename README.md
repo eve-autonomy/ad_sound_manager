@@ -1,7 +1,9 @@
 # ad_sound_manager
 
 ## Overview
-This node switches the sound to play depending on the state of the system.
+Any autonomous driving vehicle have to notify its action to surrounding people.
+
+This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle.
 
 This node plays sound in the following order of priority.
 1. Alert people around the ego vehicle once before the ego vehicle departs. The ego vehicle will not depart until the alert is complete.
