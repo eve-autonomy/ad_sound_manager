@@ -19,15 +19,18 @@ This node plays sound in the following order of priority.
 
 ## Input and Output
 - input
-  - from autoware
+  - from [autoware.universe](https://github.com/autowarefoundation/autoware.universe)
     - `/awapi/vehicle/get/status` : Vehicle status. Refers to the status of the turn signal.
-  - from eve oss
+  - from [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
     - `/autoware_state_machine/state` : State of the system.
+  - from sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
     - `/sound_voice_alarm/audio_res` : Notification that voice alarm playback is complete.
 - output
-  - to eve oss
+  - to [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
     - `/autoware_state_machine/state_sound_done` : Notification that sound playback is complete.
+  - to sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
     - `/sound_voice_alarm/audio_cmd` : Voice alarm playback request.
+  - to sound_bgm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
     - `/sound_bgm/audio_cmd` : BGM playback requst.
 ## Node Graph
 ![node graph](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/docs/node_graph.pu)
