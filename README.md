@@ -7,15 +7,15 @@ This node selects both a recorded voice and BGM depending on a state of whole sy
 
 This node plays sound in the following order of priority.
 1. Alert people around the ego vehicle once before the ego vehicle departs. The ego vehicle will not depart until the alert is complete.
-2. Keep alerting obstacles around the ego vehicle.
-3. Keep alerting obstacles in the ego vehicle's path.
-4. Notify the cargo receiver once that the ego vehicle has arrived.
-5. Keep informed that the ego vehicle is avoiding obstacles.
-6. Keep informed that the ego vehicle is turning left or right.
-7. Keep requesting an departure permit for on-demand delivery.
-8. Keep alerting people around the ego vehicle while driving.
-9. Notify operator once that the system has booted successfully.
-10. Keep informed that the system is being in shut down sequence.
+1. Keep alerting obstacles around the ego vehicle.
+1. Keep alerting obstacles in the ego vehicle's path.
+1. Notify the cargo receiver once that the ego vehicle has arrived.
+1. Keep informed that the ego vehicle is avoiding obstacles.
+1. Keep informed that the ego vehicle is turning left or right.
+1. Keep requesting an departure permit for on-demand delivery.
+1. Keep alerting people around the ego vehicle while driving.
+1. Notify operator once that the system has booted successfully.
+1. Keep informed that the system is being in shut down sequence.
 
 ## Input and Output
 - input
