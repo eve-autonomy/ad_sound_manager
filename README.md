@@ -35,6 +35,11 @@ This node plays sound in the following order of priority.
 ## Node Graph
 ![node graph](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/docs/node_graph.pu)
 
+## Launch arguments
+|Name|Description|
+|:---|:----------|
+|lang|Switches the reference destination of the sound directory. See [ad_aound.default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details.|
+
 ## Parameter discription
 
 <table>
