@@ -38,7 +38,7 @@ This node plays sound in the following order of priority.
 ## Launch arguments
 |Name|Description|
 |:---|:----------|
-|lang|Switches the reference destination of the sound directory. See [ad_aound.default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details.|
+|lang|Switches the reference destination of the sound directory. See [ad_sound_default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details.|
 
 ## Parameter description
 
