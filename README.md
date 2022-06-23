@@ -1,10 +1,9 @@
-# autonomous_driving_sound_manager
+# Autonomous Driving: Sound Manager
 
 ## Overview
-Any autonomous driving vehicle have to notify its action to surrounding people.
+Every autonomous driving vehicle notifies its action to surrounding people.
 
 This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle.
-
 This node plays sound in the following order of priority.
 1. Alert people around the ego vehicle once before the ego vehicle departs. The ego vehicle will not depart until the alert is complete.
 1. Keep alerting obstacles around the ego vehicle.
@@ -24,10 +23,10 @@ This node plays sound in the following order of priority.
   - from [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
     - `/autoware_state_machine/state` : State of the system.
   - from sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_voice_alarm/audio_res` : Notification that voice alarm playback is complete.
+    - `/sound_voice_alarm/audio_res` : Acknowledgement that voice alarm playback is complete.
 - output
   - to [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
-    - `/autoware_state_machine/state_sound_done` : Notification that sound playback is complete.
+    - `/autoware_state_machine/state_sound_done` : Acknowledgement that sound playback is complete.
   - to sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
     - `/sound_voice_alarm/audio_cmd` : Voice alarm playback request.
   - to sound_bgm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
@@ -38,7 +37,7 @@ This node plays sound in the following order of priority.
 ## Launch arguments
 |Name|Description|
 |:---|:----------|
-|lang|Switches the reference destination of the sound directory. See [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details.|
+|lang|Switch a set of sound by directory name. See [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details.|
 
 ## Parameter description
 
@@ -52,7 +51,7 @@ This node plays sound in the following order of priority.
   <tbody>
     <tr>
 	    <td>sound_filename_avoid</td>
-	    <td>File name of the voice alert for obstacle avoidance.</td>
+	    <td>File name of a voice alert for obstacle avoidance.</td>
     <tr>
 	    <td>sound_filename_start</td>
 	    <td>File name of the voice alert for engaging the ego vehicle.</td>
