@@ -3,7 +3,7 @@
 ## Overview
 Every autonomous driving vehicle notifies its action to surrounding people.
 
-This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle.
+This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle. <br>
 This node plays sound in the following order of priority.
 1. Alert people around the ego vehicle once before the ego vehicle departs. The ego vehicle will not depart until the alert is complete.
 1. Keep alerting obstacles around the ego vehicle.
@@ -54,15 +54,15 @@ This node plays sound in the following order of priority.
 	    <td>File name of a voice alert for obstacle avoidance.</td>
     <tr>
 	    <td>sound_filename_start</td>
-	    <td>File name of the voice alert for engaging the ego vehicle.</td>
+	    <td>File name of a voice alert for engaging the ego vehicle.</td>
     </tr>
     <tr>
 	    <td>sound_filename_left</td>
-	    <td>File name of the voice alert for turning left.</td>
+	    <td>File name of a voice alert for turning left.</td>
     </tr>
     <tr>
 	    <td>sound_filename_right</td>
-	    <td>File name of the voice alert for turning right.</td>
+	    <td>File name of a voice alert for turning right.</td>
     </tr>
     <tr>
 	    <td>sound_filename_bgm</td>
