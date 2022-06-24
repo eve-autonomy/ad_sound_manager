@@ -41,55 +41,18 @@ This node plays sound in the following order of priority.
 
 ## Parameter description
 
-<table>
-  <thead>
-    <tr>
-      <th scope="col">Name</th>
-      <th scope="col">Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-	    <td>sound_filename_avoid</td>
-	    <td>File name of a voice alert for obstacle avoidance.</td>
-    <tr>
-	    <td>sound_filename_start</td>
-	    <td>File name of a voice alert for engaging the ego vehicle.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_left</td>
-	    <td>File name of a voice alert for turning left.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_right</td>
-	    <td>File name of a voice alert for turning right.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_bgm</td>
-	    <td>BGM file name as the driving warning sound.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_obstacle</td>
-	    <td>Warning sound file name for obstacles in the ego vehicle's path.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_wakeup</td>
-	    <td>Sound file name for system startup notification.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_leave</td>
-	    <td>Warning sound file name for obstacles around the ego vehicle.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_arrival</td>
-	    <td>Sound file name to notify the arrival of the ego vehicle.</td>
-    </tr>
-    <tr>
-	    <td>sound_filename_call</td>
-	    <td>Sound file name asking for permission to engage the ego vehicle for on-demand delivery.</td>
-    </tr>
-  </tbody>
-</table>
+|Name|Description|
+|:---|:----------|
+|sound_filename_avoid|File name of a voice alert for obstacle avoidance.|
+|sound_filename_start|File name of a voice alert for engaging the ego vehicle.|
+|sound_filename_left |File name of a voice alert for turning left.|
+|sound_filename_right|File name of a voice alert for turning right.|
+|sound_filename_bgm|BGM file name as the driving warning sound.|
+|sound_filename_obstacle|Warning sound file name for obstacles in the ego vehicle's path.|
+|sound_filename_wakeup|Sound file name for system startup notification.|
+|sound_filename_leave|Warning sound file name for obstacles around the ego vehicle.|
+|sound_filename_arrival|Sound file name to notify the arrival of the ego vehicle.|
+|sound_filename_call|Sound file name asking for permission to engage the ego vehicle for on-demand delivery.|
 
 The specific values for these parameters are defined in the ad_sound package.
 
