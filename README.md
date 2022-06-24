@@ -32,7 +32,7 @@ This node plays sound in the following order of priority.
   - to sound_bgm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
     - `/sound_bgm/audio_cmd` : BGM playback request.
 ## Node Graph
-![node graph](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/docs/node_graph.pu)
+![node graph](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/main/docs/node_graph.pu)
 
 ## Launch arguments
 |Name|Description|
