@@ -5,16 +5,16 @@ Every autonomous driving vehicle notifies its action to surrounding people.
 
 This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle. <br>
 This node plays sound in the following order of priority.
-1. Alert people around the ego vehicle once before the ego vehicle departs. The ego vehicle will not depart until the alert is complete.
-1. Keep alerting obstacles around the ego vehicle.
-1. Keep alerting obstacles in the ego vehicle's path.
-1. Notify the cargo receiver once that the ego vehicle has arrived.
-1. Keep informed that the ego vehicle is avoiding obstacles.
-1. Keep informed that the ego vehicle is turning left or right.
-1. Keep requesting an departure permit for on-demand delivery.
-1. Keep alerting people around the ego vehicle while driving.
-1. Notify operator once that the system has booted successfully.
-1. Keep informed that the system is being in shut down sequence.
+1. Alert people around the ego vehicle by `voice alarm` once before the ego vehicle departs.<br> The ego vehicle will not depart until the alert is complete.
+1. Keep alerting obstacles around the ego vehicle by `voice alarm`.
+1. Keep alerting obstacles in the ego vehicle's path by `voice alarm`.
+1. Notify the cargo receiver by `voice alarm` once that the ego vehicle has arrived.
+1. Keep informed by `voice alarm` that the ego vehicle is avoiding obstacles.
+1. Keep informed by `voice alarm` that the ego vehicle is turning left or right.
+1. Keep requesting an departure permit by `voice alarm` for on-demand delivery.
+1. Keep alerting people around the ego vehicle by `bgm` while driving.
+1. Notify operator by `voice alarm` once that the system has booted successfully.
+1. Keep informed by `voice alarm` that the system is being in shut down sequence.
 
 ## Input and Output
 - input
