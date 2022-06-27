@@ -19,18 +19,25 @@ This node plays sound in the following order of priority.
 ## Input and Output
 - input
   - from [autoware.universe](https://github.com/autowarefoundation/autoware.universe)
-    - `/awapi/vehicle/get/status` : Vehicle status. Refers to the status of the turn signal.
+    - `/awapi/vehicle/get/status` \[[tier4_api_msgs/msg/awapi_vehicle_status][VehicleStatus]\]:<br>Vehicle status. Refers to the status of the turn signal.
   - from [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
-    - `/autoware_state_machine/state` : State of the system.
+    - `/autoware_state_machine/state` \[[autoware_state_machine_msgs/msg/StateMachine][AWState]\]:<br>State of the system.
   - from sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_voice_alarm/audio_res` : Acknowledgement that voice alarm playback is complete.
+    - `/sound_voice_alarm/audio_res` \[[audio_driver_msgs/msg/SoundDriverRes][SDRes]\]:<br>Acknowledgement that voice alarm playback is complete.
 - output
   - to [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
-    - `/autoware_state_machine/state_sound_done` : Acknowledgement that sound playback is complete.
+    - `/autoware_state_machine/state_sound_done` \[[autoware_state_machine_msgs/msg/StateSoundDone][SoundDone]\]:<br>Acknowledgement that sound playback is complete.
   - to sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_voice_alarm/audio_cmd` : Voice alarm playback request.
+    - `/sound_voice_alarm/audio_cmd` \[[audio_driver_msgs/msg/SoundDriverCtrl][SDCtrl]\]:<br>Voice alarm playback request.
   - to sound_bgm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_bgm/audio_cmd` : BGM playback request.
+    - `/sound_bgm/audio_cmd` \[[audio_driver_msgs/msg/SoundDriverCtrl][SDCtrl]\]:<br>BGM playback request.
+
+[VehicleStatus]: https://github.com/tier4/tier4_autoware_msgs/blob/tier4/universe/tier4_api_msgs/msg/AwapiVehicleStatus.msg
+[AWState]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateMachine.msg
+[SoundDone]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateSoundDone.msg
+[SDRes]: https://github.com/eve-autonomy/audio_driver_msgs/blob/main/msg/SoundDriverRes.msg
+[SDCtrl]: https://github.com/eve-autonomy/audio_driver_msgs/blob/main/msg/SoundDriverCtrl.msg
+
 ## Node Graph
 ![node graph](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/main/docs/node_graph.pu)
 
