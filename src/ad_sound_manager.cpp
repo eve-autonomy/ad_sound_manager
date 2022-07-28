@@ -326,7 +326,7 @@ void AdSoundManager::changeSoundState(
     (cur_control_layer_state_ == autoware_state_machine_msgs::msg::StateMachine::MANUAL))
   {
     continuity_state_ = false;
-    pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
+    playLoopNoBGM(sound_filename_bgm_);
     pub_voice_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
     pre_sound_filename_ = "";
     return;
@@ -359,7 +359,7 @@ void AdSoundManager::changeSoundState(
       pre_sound_filename_ = "";
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_CALL_PERMISSION:
-      pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
+      playLoopNoBGM(sound_filename_bgm_);
       continuity_state_ = false;
       playLoopVoice(sound_filename_call_, false, true);
       break;
@@ -481,7 +481,7 @@ void AdSoundManager::changeSoundState(
     case autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP:
     case autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_CLOSE:
     case autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE:
-      pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
+      playLoopNoBGM(sound_filename_bgm_);
       continuity_state_ = false;
       pub_voice_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
       pre_sound_filename_ = "";
