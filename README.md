@@ -64,3 +64,7 @@ This node plays sound in the following order of priority.
 The specific values for these parameters are defined in the ad_sound package.
 
 If you want to use different sound, fork the [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default) repository, create a new repository.
+
+## remarks
+On some devices, after stopping audio playback for a period of time, the audio device automatically goes idle and does not play the beginning of the audio when it returns from idle.  
+The ad_sound_manager silently plays sound files registered in background music to prevent the device from automatically idling audio after transitioning to STATE_CHECK_NODE_ALIVE state.
