@@ -16,6 +16,14 @@ This node plays sound in the following order of priority.
 1. Notify operator by `voice alarm` once that the system has booted successfully.
 1. Keep informed by `voice alarm` that the system is being in shut down sequence.
 
+### Anti-idling function for audio device
+
+This node provides a function to prevent idling by continuously playing extremely low volume even if there is no audio playback request.  
+
+If the audio device does not play audio for a while, the audio device will automatically go idle.  
+This idle state is cleared when the next audio playback starts, but the problem is that the audio cuts out immediately after it starts.  
+
+By continuing to play background music at a very low volume when the vehicle is not moving (no background music required), other sounds can be played without the initial interruption due to idling.  
 ## Input and Output
 - input
   - from [autoware.universe](https://github.com/autowarefoundation/autoware.universe)
