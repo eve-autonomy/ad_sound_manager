@@ -16,6 +16,9 @@ This node plays sound in the following order of priority.
 1. Notify operator by `voice alarm` once that the system has booted successfully.
 1. Keep informed by `voice alarm` that the system is being in shut down sequence.
 
+Audio playback interruption function due to idling.
+Even when the car is not running, the background music keeps playing quietly to prevent idling.
+
 ## Input and Output
 - input
   - from [autoware.universe](https://github.com/autowarefoundation/autoware.universe)
@@ -64,7 +67,3 @@ This node plays sound in the following order of priority.
 The specific values for these parameters are defined in the ad_sound package.
 
 If you want to use different sound, fork the [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default) repository, create a new repository.
-
-## remarks
-On some devices, after stopping audio playback for a period of time, the audio device automatically goes idle and does not play the beginning of the audio when it returns from idle.  
-The ad_sound_manager silently plays sound files registered in background music to prevent the device from automatically idling audio after transitioning to STATE_CHECK_NODE_ALIVE state.
