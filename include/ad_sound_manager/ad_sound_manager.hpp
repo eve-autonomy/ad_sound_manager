@@ -24,6 +24,8 @@
 #include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
 #include "tier4_api_msgs/msg/awapi_vehicle_status.hpp"
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
+#include "sound_msgs/msg/sound_request.hpp"
+#include "tier4_external_api_msgs/msg/response_status.hpp"
 
 #define VOLUME_VOICE_ALARM          (1.0)
 #define VOLUME_HIGH_BGM             (0.3)
@@ -71,7 +73,8 @@ private:
   rclcpp::Subscription<audio_driver_msgs::msg::SoundDriverRes>::SharedPtr sub_bgm_res_, sub_voice_res_;
   rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr
     sub_awapi_vehicle_state_;
-
+  rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
+  rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
 
   // Turn signal information from AwapiVehicleStatus.
@@ -91,6 +94,8 @@ private:
   // Store the status of one-time playback waiting for a response.
   int one_play_state_;
 
+  bool is_playing_sound_initialpose_;
+
   // Store the latest status receive from autoware_state_machine.
   uint16_t cur_service_layer_state_;
   uint16_t prev_service_layer_state_;
@@ -103,6 +108,7 @@ private:
     const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg);
   void callbackAwapiVehicleState(
     const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg);
+  void callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg);
 
   void publishSoundDone(void);
 
@@ -136,6 +142,7 @@ private:
   std::string sound_filename_leave_ = "";
   std::string sound_filename_arrival_ = "";
   std::string sound_filename_call_ = "";
+  std::string sound_filename_alert_imu_initialize_ = "";
   std::string pre_sound_filename_ = "";
 
   std::string sound_directory_path_ = "";
