@@ -37,6 +37,20 @@ rclcpp_components_register_node(ad_sound_manager
   EXECUTABLE ad_sound_manager_node
 )
 
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+  ament_add_ros_isolated_gmock(test_${PROJECT_NAME}
+    test/test_ad_sound_manager.cpp
+  )
+  target_link_libraries(test_${PROJECT_NAME}
+    ${PROJECT_NAME}
+  )
+  target_include_directories(test_${PROJECT_NAME} PRIVATE
+  src
+)
+endif()
+
 ament_auto_package(INSTALL_TO_SHARE
   launch
 )
