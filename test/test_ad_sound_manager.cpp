@@ -19,6 +19,10 @@ class AdSoundManagerTest : public ad_sound_manager::AdSoundManager
 {
 public:
   AdSoundManagerTest() : AdSoundManager(setupNodeOptions()) {}
+  void setIsPlayingSoundInitialpose(bool is_playing_sound_initialpose)
+  {
+    is_playing_sound_initialpose_ = is_playing_sound_initialpose;
+  }
 
 private:
   static rclcpp::NodeOptions setupNodeOptions()
@@ -77,7 +81,7 @@ TEST(AdSoundManagerTest, DT_3_4_1)
   }
   EXPECT_EQ(sound_driver_ctrl.cmd_type, audio_driver_msgs::msg::SoundDriverCtrl::CMD_PLAY);
   EXPECT_EQ(sound_driver_ctrl.volume, 1.0);
-  // TODO: ファイルパスがローカルに依存しているのでどうにかする。
+  // TODO(kubota): ファイルパスがローカルに依存しているのでどうにかする。
   EXPECT_EQ(
     sound_driver_ctrl.file_path,
     "/home/masahirokubota/eve/v4.4.0/pilot-auto.x1.eve/src/x1/dataset/ad_sound/wavs/ja/"
@@ -85,4 +89,34 @@ TEST(AdSoundManagerTest, DT_3_4_1)
   EXPECT_EQ(sound_driver_ctrl.is_loop, false);
   EXPECT_EQ(sound_driver_ctrl.loop_delay, 0.0);
   EXPECT_EQ(sound_driver_ctrl.start_delay, 0.0);
+  rclcpp::shutdown();
+}
+
+TEST(AdSoundManagerTest, DT_3_8)
+{
+  rclcpp::init(0, nullptr);
+  int count = 0;
+  tier4_external_api_msgs::msg::ResponseStatus response;
+  auto node = std::make_shared<AdSoundManagerTest>();
+  auto test_node = rclcpp::Node::make_shared("test_node");
+  auto publisher = test_node->create_publisher<audio_driver_msgs::msg::SoundDriverRes>(
+    "/sound_voice_alarm/audio_res", rclcpp::QoS{3}.transient_local());
+  auto subscriber = test_node->create_subscription<tier4_external_api_msgs::msg::ResponseStatus>(
+    "/localization/initial_pose/sound/response", rclcpp::QoS{5}.transient_local(),
+    [&response](const tier4_external_api_msgs::msg::ResponseStatus msg) {
+      RCLCPP_INFO(rclcpp::get_logger("test"), "Received message");
+      response = msg;
+    });
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+  executor.add_node(test_node);
+  node->setIsPlayingSoundInitialpose(true);
+  audio_driver_msgs::msg::SoundDriverRes response_status;
+  publisher->publish(response_status);
+  for (int i = 0; i < 2; i++) {
+    executor.spin_some();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  EXPECT_EQ(response.code, tier4_external_api_msgs::msg::ResponseStatus::SUCCESS);
+  rclcpp::shutdown();
 }

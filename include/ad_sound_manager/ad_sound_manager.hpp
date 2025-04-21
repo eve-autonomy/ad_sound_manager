@@ -94,8 +94,6 @@ private:
   // Store the status of one-time playback waiting for a response.
   int one_play_state_;
 
-  bool is_playing_sound_initialpose_;
-
   // Store the latest status receive from autoware_state_machine.
   uint16_t cur_service_layer_state_;
   uint16_t prev_service_layer_state_;
@@ -146,6 +144,9 @@ private:
   std::string pre_sound_filename_ = "";
 
   std::string sound_directory_path_ = "";
+
+protected:
+  bool is_playing_sound_initialpose_;
 };
 
 }  // namespace ad_sound_manager
