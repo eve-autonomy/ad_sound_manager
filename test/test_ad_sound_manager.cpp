@@ -50,6 +50,7 @@ private:
   }
 };
 
+// DT_3_4
 TEST(AdSoundManagerTest, DT_3_4_1)
 {
   rclcpp::init(0, nullptr);
@@ -92,7 +93,8 @@ TEST(AdSoundManagerTest, DT_3_4_1)
   rclcpp::shutdown();
 }
 
-TEST(AdSoundManagerTest, DT_3_8)
+// DT_3_8
+TEST(AdSoundManagerTest, DT_3_8_1)
 {
   rclcpp::init(0, nullptr);
   int count = 0;
