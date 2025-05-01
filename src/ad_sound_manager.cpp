@@ -226,8 +226,6 @@ void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::Soun
   is_playing_sound_initialpose_ = true;
 }
 
-
-
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
   const int cmd_type, const float volume,
   const std::string file_path, const bool is_loop,
