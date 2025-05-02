@@ -43,6 +43,12 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
     std::bind(&AdSoundManager::callbackVoiceRes, this, std::placeholders::_1)
   );
 
+  sub_sound_request_initialpose_ = this->create_subscription<sound_msgs::msg::SoundRequest>(
+    "/localization/initial_pose/sound/request",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::callbackSoundRequestInitialpose, this, std::placeholders::_1)
+  );
+
   pub_voice_cmd_ = this->create_publisher<audio_driver_msgs::msg::SoundDriverCtrl>(
     "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local());
 
@@ -52,6 +58,9 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   pub_sound_done_ =
     this->create_publisher<autoware_state_machine_msgs::msg::StateSoundDone>(
     "/autoware_state_machine/state_sound_done", rclcpp::QoS{3}.transient_local());
+
+  pub_sound_response_initialpose_ = this->create_publisher<tier4_external_api_msgs::msg::ResponseStatus>(
+    "/localization/initial_pose/sound/response", rclcpp::QoS{3}.transient_local());
 
   sound_filename_avoid_ = this->declare_parameter<std::string>("sound_filename_avoid", "");
   sound_filename_start_ = this->declare_parameter<std::string>("sound_filename_start", "");
@@ -63,6 +72,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   sound_filename_leave_ = this->declare_parameter<std::string>("sound_filename_leave", "");
   sound_filename_arrival_ = this->declare_parameter<std::string>("sound_filename_arrival", "");
   sound_filename_call_ = this->declare_parameter<std::string>("sound_filename_call", "");
+  sound_filename_alert_imu_initialize_ = this->declare_parameter<std::string>("sound_filename_alert_imu_initialize", "");
   sound_directory_path_ = this->declare_parameter<std::string>("sound_directory_path", "");
 
   // Check for the audio file names.
@@ -93,6 +103,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   prev_service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
   cur_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
   prev_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
+  is_playing_sound_initialpose_ = false;
 
   std::string sound_directory_path =
     sound_directory_path_.insert(sound_directory_path_.size(), "/");
@@ -107,6 +118,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   sound_filename_leave_ = sound_directory_path + sound_filename_leave_;
   sound_filename_arrival_ = sound_directory_path + sound_filename_arrival_;
   sound_filename_call_ = sound_directory_path + sound_filename_call_;
+  sound_filename_alert_imu_initialize_ = sound_directory_path + sound_filename_alert_imu_initialize_;
 
   // Check for the existence of audio files.
   makeFullPathWithFileCheck(sound_filename_avoid_);
@@ -119,6 +131,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   makeFullPathWithFileCheck(sound_filename_leave_);
   makeFullPathWithFileCheck(sound_filename_arrival_);
   makeFullPathWithFileCheck(sound_filename_call_);
+  makeFullPathWithFileCheck(sound_filename_alert_imu_initialize_);
 }
 
 AdSoundManager::~AdSoundManager()
@@ -187,6 +200,13 @@ void AdSoundManager::callbackVoiceRes(
   {
     publishSoundDone();
   }
+  if (is_playing_sound_initialpose_) {
+    tier4_external_api_msgs::msg::ResponseStatus response_status;
+    response_status.code = tier4_external_api_msgs::msg::ResponseStatus::SUCCESS;
+    response_status.message = "OK";
+    pub_sound_response_initialpose_->publish(response_status);
+    is_playing_sound_initialpose_ = false;
+  }
 }
 
 void AdSoundManager::callbackAwapiVehicleState(
@@ -196,6 +216,14 @@ void AdSoundManager::callbackAwapiVehicleState(
     turn_signal_ = msg->turn_signal;
     changeSoundState(cur_service_layer_state_, cur_control_layer_state_, true);
   }
+}
+
+void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg)
+{
+  std::string file_path = sound_filename_alert_imu_initialize_;
+  bool cut_in = false;
+  playOneshotVoice(file_path, cut_in);
+  is_playing_sound_initialpose_ = true;
 }
 
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
