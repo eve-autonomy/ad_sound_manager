@@ -34,6 +34,11 @@
   <depend>autoware_state_machine_msgs</depend>
   <depend>tier4_external_api_msgs</depend>
   <depend>sound_msgs</depend>
+  <depend>autoware_adapi_v1_msgs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>go_interface_msgs</depend>
+  <depend>autoware_vehicle_msgs</depend>
+
 
   <test_depend>ament_cmake_ros</test_depend>
   <test_depend>ament_lint_auto</test_depend>

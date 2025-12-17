@@ -25,17 +25,22 @@ namespace ad_sound_manager
 AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
 : Node("ad_sound_manager", options)
 {
-  sub_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateMachine>(
-    "/autoware_state_machine/state",
-    rclcpp::QoS{3}.transient_local(),
-    std::bind(&AdSoundManager::callbackAutowareStateMachine, this, std::placeholders::_1)
-  );
+  // Parameter
+  double stop_dist_to_prohibit_engage = this->declare_parameter<double>("stop_dist_to_prohibit_engage", 0.30);
+  // Add a value of 0.05 to `stop_dist_to_prohibit_engage`.
+  dist_to_stop_pose_min_th_ = stop_dist_to_prohibit_engage + 0.05;
 
-  sub_awapi_vehicle_state_ = this->create_subscription<tier4_api_msgs::msg::AwapiVehicleStatus>(
-    "/awapi/vehicle/get/status",
-    rclcpp::QoS{1},
-    std::bind(&AdSoundManager::callbackAwapiVehicleState, this, std::placeholders::_1)
-  );
+//  sub_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateMachine>(
+//    "/autoware_state_machine/state",
+//    rclcpp::QoS{3}.transient_local(),
+//    std::bind(&AdSoundManager::callbackAutowareStateMachine, this, std::placeholders::_1)
+//  );
+
+//  sub_awapi_vehicle_state_ = this->create_subscription<tier4_api_msgs::msg::AwapiVehicleStatus>(
+//    "/awapi/vehicle/get/status",
+//    rclcpp::QoS{1},
+//    std::bind(&AdSoundManager::callbackAwapiVehicleState, this, std::placeholders::_1)
+//  );
 
   sub_voice_res_ = this->create_subscription<audio_driver_msgs::msg::SoundDriverRes>(
     "/sound_voice_alarm/audio_res",
@@ -47,6 +52,86 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
     "/localization/initial_pose/sound/request",
     rclcpp::QoS{3}.transient_local(),
     std::bind(&AdSoundManager::callbackSoundRequestInitialpose, this, std::placeholders::_1)
+  );
+
+  // autoware_state
+  sub_initilization_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>(
+    "/api/localization/initialization_state",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onAutowareInitializationMessage, this, std::placeholders::_1)
+  );
+
+  // routing wait state
+  sub_routing_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::RouteState>(
+    "/api/routing/state",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onRoutingStateMessage, this, std::placeholders::_1)
+  );
+  sub_routing_route_ = this->create_subscription<autoware_adapi_v1_msgs::msg::Route>(
+    "/api/routing/route",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onRoutingRouteMessage, this, std::placeholders::_1)
+  );
+
+  // daignostics struct for EM Holding
+  sub_daignostics_struct_ = this->create_subscription<autoware_adapi_v1_msgs::msg::DiagGraphStruct>(
+    "/api/system/diagnostics/struct",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onDaignosticsStructMessage, this, std::placeholders::_1)
+  );
+  sub_daignostics_status_ = this->create_subscription<autoware_adapi_v1_msgs::msg::DiagGraphStatus>(
+    "/api/system/diagnostics/status",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onDaignosticsStateMessage, this, std::placeholders::_1)
+  );
+
+  // OperationModeState
+  sub_operation_mode_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::OperationModeState>(
+    "/api/operation_mode/state",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onOperationModeStateMessage, this, std::placeholders::_1)
+  );
+
+  // vehicle_status
+  sub_calls_vehicle_state_ = this->create_subscription<go_interface_msgs::msg::VehicleStatus>(
+    "api_vehicle_status",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onVehicleStateMessage, this, std::placeholders::_1)
+  );
+
+  // delivery reservation state
+  sub_delivery_reservation_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateLock>(
+    "/go_interface/lock_state",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onDeliveryReservationMessage, this, std::placeholders::_1)
+  );
+
+  // engage process state
+  sub_engage_process_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateMachine>(
+    "xxxxx/xxxx",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onEngageProcessMessage, this, std::placeholders::_1)
+  );
+
+  // velocity
+  sub_vehicle_kinematics_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleKinematics>(
+    "/api/vehicle/kinematics",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onVehicleKinematicsMessage, this, std::placeholders::_1)
+  );
+
+  // turn_signal
+  sub_vehicle_status_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>(
+    "/api/vehicle/status",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onVehicleStatusMessage, this, std::placeholders::_1)
+  );
+
+  // stop reasons
+  sub_planning_factors_ = this->create_subscription<tier4_planning_msgs::msg::PlanningFactorArray>(
+    "/planning/planning_factors",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::onPlanningFactorsMessage, this, std::placeholders::_1)
   );
 
   pub_voice_cmd_ = this->create_publisher<audio_driver_msgs::msg::SoundDriverCtrl>(
@@ -132,6 +217,25 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   makeFullPathWithFileCheck(sound_filename_arrival_);
   makeFullPathWithFileCheck(sound_filename_call_);
   makeFullPathWithFileCheck(sound_filename_alert_imu_initialize_);
+
+  em_holding_indices_ = std::nullopt;
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
+  control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
+  initilization_state_ = autoware_adapi_v1_msgs::msg::LocalizationInitializationState::UNKNOWN;
+  routing_state_ = autoware_adapi_v1_msgs::msg::RouteState::UNKNOWN;
+  delivery_reservation_state_ = autoware_state_machine_msgs::msg::StateLock::STATE_OFF;
+  em_holding_ = false;
+  operation_state_.is_autoware_control_enabled = false;
+  operation_state_.is_in_transition = false;
+  operation_state_.is_stop_mode_available = false;
+  operation_state_.is_autonomous_mode_available = false;
+  operation_state_.is_local_mode_available = false;
+  operation_state_.is_remote_mode_available = false;
+  is_obstacle_stop_ = false;
+  is_detection_area_ = false;
+  is_crosswalk_ = false;
+  is_surround_obstacle_check_ = false;
+  is_stop_reason_ = false;
 }
 
 AdSoundManager::~AdSoundManager()
@@ -167,21 +271,26 @@ void AdSoundManager::publishSoundDone(void)
   done_msg.state = one_play_state_;
   done_msg.done = true;
   pub_sound_done_->publish(done_msg);
+
+  one_play_done_flag_ = true;
+  changeState();
+
   one_play_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
+  one_play_done_flag_ = false;
 }
 
-void AdSoundManager::callbackAutowareStateMachine(
-  const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg)
-{
-  RCLCPP_INFO_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(), 1.0,
-    "[AdSoundManager::callback]service_layer_state: %u, control_layer_state: %u",
-    msg->service_layer_state,
-    msg->control_layer_state);
-
-  changeSoundState(msg->service_layer_state, msg->control_layer_state, false);
-}
+//void AdSoundManager::callbackAutowareStateMachine(
+//  const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg)
+//{
+//  RCLCPP_INFO_THROTTLE(
+//    this->get_logger(),
+//    *this->get_clock(), 1.0,
+//    "[AdSoundManager::callback]service_layer_state: %u, control_layer_state: %u",
+//    msg->service_layer_state,
+//    msg->control_layer_state);
+//
+//  changeSoundState(msg->service_layer_state, msg->control_layer_state, false);
+//}
 
 void AdSoundManager::callbackVoiceRes(
   const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg)
@@ -209,14 +318,14 @@ void AdSoundManager::callbackVoiceRes(
   }
 }
 
-void AdSoundManager::callbackAwapiVehicleState(
-  const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg)
-{
-  if (turn_signal_ != msg->turn_signal) {
-    turn_signal_ = msg->turn_signal;
-    changeSoundState(cur_service_layer_state_, cur_control_layer_state_, true);
-  }
-}
+//void AdSoundManager::callbackAwapiVehicleState(
+//  const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg)
+//{
+//  if (turn_signal_ != msg->turn_signal) {
+//    turn_signal_ = msg->turn_signal;
+//    changeSoundState(cur_service_layer_state_, cur_control_layer_state_, true);
+//  }
+//}
 
 void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg)
 {
@@ -224,6 +333,220 @@ void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::Soun
   bool cut_in = false;
   playOneshotVoice(file_path, cut_in);
   is_playing_sound_initialpose_ = true;
+}
+
+void AdSoundManager::onAutowareInitializationMessage(
+  const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg)
+{
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onAutowareInitializationMessage]autoware_state: %u",
+    msg->state);
+
+  initilization_state_ = msg->state;
+
+  changeState();
+}
+
+void AdSoundManager::onRoutingStateMessage(
+  const autoware_adapi_v1_msgs::msg::RouteState::ConstSharedPtr msg)
+{
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onRoutingStateMessage]routing_state: %u",
+    msg->state);
+
+  routing_state_ = msg->state;
+
+  changeState();
+}
+
+void AdSoundManager::onRoutingRouteMessage(
+  const autoware_adapi_v1_msgs::msg::Route::ConstSharedPtr msg)
+{
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onRoutingRouteMessage]data.size: %lu",
+    msg->data.size());
+
+  routing_data_size_ = msg->data.size();
+
+  changeState();
+}
+
+void AdSoundManager::onDaignosticsStructMessage(
+  const autoware_adapi_v1_msgs::msg::DiagGraphStruct::ConstSharedPtr msg)
+{
+  auto nodes = msg->nodes;
+
+  for (uint16_t i = 0; i < nodes.size(); ++i) {
+    if (nodes[i].path == "/autoware/modes/autonomous") {
+      em_holding_indices_ = i;
+      RCLCPP_INFO_THROTTLE(
+        this->get_logger(),
+        *this->get_clock(), 1.0,
+        "[AdSoundManager::onDaignosticsStructMessage]daignostics_graph /autoware/modes/autonomous index: %u", i);
+      break;
+    }
+  }
+}
+
+void AdSoundManager::onDaignosticsStateMessage(
+  const autoware_adapi_v1_msgs::msg::DiagGraphStatus::ConstSharedPtr msg)
+{
+  auto nodes = msg->nodes;
+  if (em_holding_indices_ != std::nullopt) {
+    // TODO:Ph3にて、levelをlatch_levelに変更
+    if (nodes[em_holding_indices_.value()].level == diagnostic_msgs::msg::DiagnosticStatus::ERROR) {
+      em_holding_ = true;
+      RCLCPP_INFO_THROTTLE(
+        this->get_logger(),
+        *this->get_clock(), 1.0,
+        "[AdSoundManager::onDaignosticsStateMessage]/autoware/modes/autonomous latch_level: %u",
+        nodes[em_holding_indices_.value()].level);// TODO:Ph3にて、levelをlatch_levelに変更
+    } else {
+      em_holding_ = false;
+    }
+
+    changeState();
+  }
+}
+
+void AdSoundManager::onOperationModeStateMessage(
+  const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg)
+{
+  operation_state_ = *msg;
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onOperationModeStateMessage]operation mode: %u",
+      msg->mode);
+
+  changeState();
+}
+
+void AdSoundManager::onVehicleStateMessage(
+  const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg)
+{
+  flag_calls_vehicle_voice_ = msg->voice_flg;
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onOperationModeStateMessage]vheicle voice: %u",
+      msg->voice_flg);
+
+  changeState();
+}
+
+void AdSoundManager::onDeliveryReservationMessage(
+  const autoware_state_machine_msgs::msg::StateLock::ConstSharedPtr msg)
+{
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onDeliveryReservationMessage]"
+    "StateLock: %u",
+    msg->state);
+
+  delivery_reservation_state_ = msg->state;
+  changeState();
+}
+
+void AdSoundManager::onEngageProcessMessage(
+  const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg)
+{
+//  is_engage_requesting_ = msg->request;
+//  is_engage_accepted_ = msg->accept;
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onEngageProcessMessage]"
+    "request: %u, accept: %u",
+    msg->service_layer_state, msg->control_layer_state);
+//    is_engage_requesting_, is_engage_accepted_);
+
+  changeState();
+}
+
+void AdSoundManager::onVehicleKinematicsMessage(
+  const autoware_adapi_v1_msgs::msg::VehicleKinematics::ConstSharedPtr msg)
+{
+  velocity_ = msg->twist.twist.twist.linear.x;
+  vehicle_pose_ = msg->pose.pose.pose;
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onVehicleKinematicsMessage]"
+    "velocity: %f, pose: [%f,%f,%f]",
+    msg->twist.twist.twist.linear.x,
+    msg->pose.pose.pose.position.x,msg->pose.pose.pose.position.y,msg->pose.pose.pose.position.z);
+
+  changeState();
+}
+
+void AdSoundManager::onVehicleStatusMessage(
+  const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg)
+{
+  auto pre_turn_signal_ = turn_signal_;
+  turn_signal_ = msg->turn_indicators.status;
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onVehicleStatusMessage]"
+    "turn_signal: %u",
+    msg->turn_indicators.status);
+
+  if (pre_turn_signal_ != turn_signal_) {
+    changeSoundState(service_layer_state_, control_layer_state_, true);
+  }
+}
+
+void AdSoundManager::onPlanningFactorsMessage(
+  const tier4_planning_msgs::msg::PlanningFactorArray::ConstSharedPtr msg)
+{
+  bool is_other_factor = false;
+  is_obstacle_stop_ = false;
+  is_detection_area_ = false;
+  is_crosswalk_ = false;
+  is_surround_obstacle_check_ = false;
+  for (const auto & factor : msg->factors) {
+/*
+    if (factor.behavior_type == tier4_planning_msgs::msg::PlanningFactor::STOP) {
+      if (factor.behavior_name == tier4_planning_msgs::msg::PlanningFactor::ROUTE_OBSTACLE) {
+        is_obstacle_stop_ = true;
+        dist_to_stop_pose_ = factor.control_points.distance;
+      }
+      else if (factor.behavior_name == tier4_planning_msgs::msg::PlanningFactor::USER_DEFINED_DETECTION_AREA) {
+        is_detection_area_ = true;
+        dist_to_stop_pose_ = factor.control_points.distance;
+      }
+      else if (factor.behavior_name == tier4_planning_msgs::msg::PlanningFactor::CROSSWALK) {
+        is_crosswalk_ = true;
+        dist_to_stop_pose_ = factor.control_points.distance;
+      }
+      else if (factor.behavior_name == tier4_planning_msgs::msg::PlanningFactor::SURROUNDING_OBSTACLE) {
+        is_surround_obstacle_check_ = true;
+        dist_to_stop_pose_ = factor.control_points.distance;
+      }
+      else {
+        is_other_factor = true;
+      }
+    }
+*/
+  }
+  is_stop_reason_ = is_obstacle_stop_ | is_detection_area_ | is_crosswalk_ | is_surround_obstacle_check_ | is_other_factor;
+
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(), 1.0,
+    "[AdSoundManager::onPlanningFactorsMessage]"
+    "size: %lu, is_stop_reason: %u, is_obstacle_stop: %u, is_detection_area_: %u, is_crosswalk_: %u, is_surround_obstacle_check_: %u",
+    msg->factors.size(), is_stop_reason_, is_obstacle_stop_, is_detection_area_, is_crosswalk_, is_surround_obstacle_check_);
+
+  changeState();
 }
 
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
@@ -516,6 +839,406 @@ void AdSoundManager::changeSoundState(
       break;
     default:
       break;
+  }
+}
+
+bool AdSoundManager::isAutowareStateOfInitializingVehicle(void)
+{
+  if (initilization_state_ == autoware_adapi_v1_msgs::msg::LocalizationInitializationState::INITIALIZED) {
+    return false;
+  }
+
+  return true;
+}
+
+bool AdSoundManager::isAutowareStateOfWaitingForRoute(void)
+{
+  if ((routing_state_ != autoware_adapi_v1_msgs::msg::RouteState::UNSET) &&
+      (routing_state_ != autoware_adapi_v1_msgs::msg::RouteState::CHANGING)) {
+    return false;
+  }
+  if ((initilization_state_ != autoware_adapi_v1_msgs::msg::LocalizationInitializationState::INITIALIZED) ||
+      (routing_data_size_ != 0)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool AdSoundManager::isAutowareStateOfPlanning(void)
+{
+  if ((initilization_state_ != autoware_adapi_v1_msgs::msg::LocalizationInitializationState::INITIALIZED) ||
+      (routing_state_ != autoware_adapi_v1_msgs::msg::RouteState::SET) ||
+      (routing_data_size_ != 0) ||
+      (operation_state_.mode != autoware_adapi_v1_msgs::msg::OperationModeState::STOP) ||
+      (operation_state_.is_autoware_control_enabled == true) ||
+      (operation_state_.is_autonomous_mode_available == true)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool AdSoundManager::isAutowareStateOfWaitingForEngage(void)
+{
+  if ((initilization_state_ != autoware_adapi_v1_msgs::msg::LocalizationInitializationState::INITIALIZED) ||
+      (routing_state_ != autoware_adapi_v1_msgs::msg::RouteState::SET) ||
+      (routing_data_size_ == 0) ||
+      (operation_state_.mode != autoware_adapi_v1_msgs::msg::OperationModeState::STOP) ||
+      (operation_state_.is_autoware_control_enabled == true) ||
+      (operation_state_.is_autonomous_mode_available != true)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool AdSoundManager::isAutowareStateOfDriving(void)
+{
+  if ((initilization_state_ != autoware_adapi_v1_msgs::msg::LocalizationInitializationState::INITIALIZED) ||
+      (routing_state_ != autoware_adapi_v1_msgs::msg::RouteState::SET) ||
+      (routing_data_size_ == 0) ||
+      (operation_state_.mode != autoware_adapi_v1_msgs::msg::OperationModeState::AUTONOMOUS) ||
+      (operation_state_.is_autoware_control_enabled != true) ||
+      (operation_state_.is_in_transition == true)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool AdSoundManager::isAutowareStateOfArrivedGoal(void)
+{
+  if ((initilization_state_ != autoware_adapi_v1_msgs::msg::LocalizationInitializationState::INITIALIZED) ||
+      (routing_state_ != autoware_adapi_v1_msgs::msg::RouteState::ARRIVED)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool AdSoundManager::changeCheckNodeAlive(void)
+{
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE;
+  return true;
+}
+
+bool AdSoundManager::changeStateDuringWakeUp(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (one_play_state_ != service_layer_state_) ||
+      (one_play_state_ != autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
+      (one_play_done_flag_ != true)) {
+    return false;
+  } else {
+    one_play_done_flag_ = false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP;
+  return true;
+}
+
+bool AdSoundManager::changeStateDuringReceiveRoute(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (one_play_state_ != service_layer_state_) ||
+      (one_play_state_ != autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
+      (one_play_done_flag_ != true)) {
+    if (service_layer_state_ != autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP) {
+      return false;
+    }
+  } else {
+    one_play_done_flag_ = false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
+  return true;
+}
+
+bool AdSoundManager::changeStateWaitingEngageInstruction(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (one_play_state_ != service_layer_state_) ||
+      (one_play_state_ != autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
+      (one_play_done_flag_ != true)) {
+    if (service_layer_state_ != autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP) {
+      return false;
+    }
+  } else {
+    one_play_done_flag_ = false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION;
+  return true;
+}
+
+bool AdSoundManager::changeStateWaitingCallPermission(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (flag_calls_vehicle_voice_ != true) ||
+      (delivery_reservation_state_ != autoware_state_machine_msgs::msg::StateLock::STATE_ON)) {
+      return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_CALL_PERMISSION;
+  return true;
+}
+
+bool AdSoundManager::changeStateInformEngage(void)
+{
+  if ((is_engage_requesting_ != true) ||
+      (flag_calls_vehicle_voice_ == true) ||
+      (delivery_reservation_state_ != autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE;
+  return true;
+}
+
+bool AdSoundManager::changeStateInstructEngage(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (one_play_state_ != service_layer_state_) ||
+      (one_play_state_ != autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
+      (one_play_done_flag_ != true)) {
+    return false;
+  } else {
+    one_play_done_flag_ = false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_INSTRUCT_ENGAGE;
+  return true;
+}
+
+bool AdSoundManager::changeStateRunning(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (is_stop_reason_ == true) ||
+      (turn_signal_ != autoware_adapi_v1_msgs::msg::TurnIndicators::DISABLE)) {
+    return false;
+  }
+
+  if ((one_play_state_ == service_layer_state_) &&
+      (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART)) {
+    if (one_play_done_flag_ != true) {
+      return false;
+    } else {
+      one_play_done_flag_ = false;
+    }
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING;
+  return true;
+}
+
+bool AdSoundManager::changeStateTurningLeft(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (turn_signal_ != autoware_adapi_v1_msgs::msg::TurnIndicators::LEFT)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_LEFT;
+  return true;
+}
+
+bool AdSoundManager::changeStateTurningRight(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (turn_signal_ != autoware_adapi_v1_msgs::msg::TurnIndicators::RIGHT)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_RIGHT;
+  return true;
+}
+
+bool AdSoundManager::changeStateInformRestart(void)
+{
+  if (is_engage_requesting_ != true ) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART;
+  return true;
+}
+
+bool AdSoundManager::changeStateRunningTowardStopLine(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (is_stop_reason_ != true) ||
+      (is_surround_obstacle_check_ == true) ||
+      (dist_to_stop_pose_ <= dist_to_stop_pose_min_th_)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_STOP_LINE;
+  return true;
+}
+
+bool AdSoundManager::changeStateRunningTowardObstacle(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      ((is_obstacle_stop_ != true) && (is_detection_area_ != true) && (is_crosswalk_ != true)) ||
+      (dist_to_stop_pose_ <= dist_to_stop_pose_min_th_)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_OBSTACLE;
+  return true;
+}
+
+bool AdSoundManager::changeStateStopDuetoTrafficCondition(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (is_stop_reason_ != true) ||
+      (is_surround_obstacle_check_ == true) || 
+      (dist_to_stop_pose_ > dist_to_stop_pose_min_th_)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION;
+  return true;
+}
+
+bool AdSoundManager::changeStateStopDuetoApproachingObstacle(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      ((is_obstacle_stop_ != true) && (is_detection_area_ != true) && (is_crosswalk_ != true)) ||
+      (dist_to_stop_pose_ > dist_to_stop_pose_min_th_)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE;
+  return true;
+}
+
+bool AdSoundManager::changeStateStopDuetoSurroundingProximity(void)
+{
+  if ((is_engage_requesting_ == true) ||
+      (is_surround_obstacle_check_ != true)) {
+    return false;
+  }
+
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY;
+  return true;
+}
+
+bool AdSoundManager::changeStateArrivedGoal(void)
+{
+  service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL;
+  return true;
+}
+
+bool AdSoundManager::updateStateOfInitializingVehicle(void)
+{
+  if (changeStateDuringWakeUp() == true) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AdSoundManager::updateState4WaitingForRoute(void)
+{
+  if (changeStateDuringReceiveRoute() == true) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AdSoundManager::updateState4Planning(void)
+{
+  if (changeStateDuringReceiveRoute() == true) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AdSoundManager::updateState4WaitingForEngage(void)
+{
+  if ((changeStateWaitingEngageInstruction() == true) ||
+      (changeStateWaitingCallPermission() == true) ||
+      (changeStateInformEngage() == true) ||
+      (changeStateInstructEngage() == true)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AdSoundManager::updateState4Drivig(void)
+{
+  if ((changeStateRunning() == true) ||
+      (changeStateRunningTowardStopLine() == true) ||
+      (changeStateRunningTowardObstacle() == true) ||
+      (changeStateTurningLeft() == true) ||
+      (changeStateTurningRight() == true) ||
+      (changeStateStopDuetoTrafficCondition() == true) ||
+      (changeStateStopDuetoApproachingObstacle() == true) ||
+      (changeStateStopDuetoSurroundingProximity() == true) ||
+      (changeStateInformRestart() == true)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AdSoundManager::updateState4ArrivedGoal(void)
+{
+  if (changeStateArrivedGoal() == true) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void AdSoundManager::changeState()
+{
+  auto pre_service_layer_state_ = service_layer_state_;
+
+  if (service_layer_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED) {
+    changeCheckNodeAlive();
+
+  } else if (em_holding_ == true) {
+    // STATE_EMERGENCY_STOP
+    service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_EMERGENCY_STOP;
+
+  } else if (isAutowareStateOfDriving() == true) {
+    updateState4Drivig();
+
+  } else if (isAutowareStateOfWaitingForEngage() == true) {
+    updateState4WaitingForEngage();
+
+  } else if (isAutowareStateOfPlanning() == true) {
+    updateState4Planning();
+
+  } else if (isAutowareStateOfWaitingForRoute() == true) {
+    updateState4WaitingForRoute();
+
+  } else if (isAutowareStateOfWaitingForRoute() == true) {
+    updateState4WaitingForRoute();
+
+  } else if (isAutowareStateOfInitializingVehicle() == true) {
+    updateStateOfInitializingVehicle();
+
+  } else {
+    // 上記以外
+    service_layer_state_ = 0xFFFF;
+  }
+
+  if ((operation_state_.is_stop_mode_available == true) ||
+      (operation_state_.is_local_mode_available == true)) {
+    control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
+  } else {
+    control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::AUTO;
+  }
+
+  if (pre_service_layer_state_ != service_layer_state_) {
+    changeSoundState(service_layer_state_, control_layer_state_, false);
   }
 }
 
