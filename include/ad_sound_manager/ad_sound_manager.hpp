@@ -26,6 +26,23 @@
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
 #include "sound_msgs/msg/sound_request.hpp"
 #include "tier4_external_api_msgs/msg/response_status.hpp"
+#include "autoware_state_machine_msgs/msg/state_lock.hpp"
+#include "go_interface_msgs/msg/vehicle_status.hpp"
+#include <autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp>
+#include <autoware_adapi_v1_msgs/msg/route_state.hpp>
+#include <autoware_adapi_v1_msgs/msg/route.hpp>
+#include <autoware_adapi_v1_msgs/msg/diag_graph_status.hpp>
+#include <autoware_adapi_v1_msgs/msg/diag_graph_struct.hpp>
+#include <autoware_adapi_v1_msgs/msg/operation_mode_state.hpp>
+#include <autoware_adapi_v1_msgs/msg/vehicle_kinematics.hpp>
+#include <autoware_adapi_v1_msgs/msg/vehicle_status.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include "tier4_planning_msgs/msg/stop_reason_array.hpp"
+#include <tier4_planning_msgs/msg/planning_factor_array.hpp>
+#include <eve_cmd_gate_msgs/msg/engage_request_state.hpp>
+#include "tier4_api_msgs/msg/awapi_autoware_status.hpp"
+
+
 
 #define VOLUME_VOICE_ALARM          (1.0)
 #define VOLUME_HIGH_BGM             (0.3)
@@ -69,16 +86,28 @@ private:
 
   rclcpp::Publisher<audio_driver_msgs::msg::SoundDriverCtrl>::SharedPtr pub_bgm_cmd_, pub_voice_cmd_;
   rclcpp::Publisher<autoware_state_machine_msgs::msg::StateSoundDone>::SharedPtr pub_sound_done_;
-  rclcpp::Subscription<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr sub_state_;
+  //rclcpp::Subscription<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr sub_state_;
   rclcpp::Subscription<audio_driver_msgs::msg::SoundDriverRes>::SharedPtr sub_bgm_res_, sub_voice_res_;
-  rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr
-    sub_awapi_vehicle_state_;
+  //rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr sub_awapi_vehicle_state_;
   rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>::SharedPtr sub_initilization_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::RouteState>::SharedPtr sub_routing_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::Route>::SharedPtr sub_routing_route_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::DiagGraphStatus>::SharedPtr sub_daignostics_status_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::DiagGraphStruct>::SharedPtr sub_daignostics_struct_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::OperationModeState>::SharedPtr sub_operation_mode_state_;
+  rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr sub_calls_vehicle_state_;
+  rclcpp::Subscription<autoware_state_machine_msgs::msg::StateLock>::SharedPtr sub_delivery_reservation_state_;
+  rclcpp::Subscription<eve_cmd_gate_msgs::msg::EngageRequestState>::SharedPtr sub_engage_process_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleKinematics>::SharedPtr sub_vehicle_kinematics_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>::SharedPtr sub_vehicle_status_;
+//  rclcpp::Subscription<tier4_planning_msgs::msg::PlanningFactorArray>::SharedPtr sub_planning_factors_;
+  rclcpp::Subscription<tier4_api_msgs::msg::AwapiAutowareStatus>::SharedPtr sub_planning_factors_;
   rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
 
   // Turn signal information from AwapiVehicleStatus.
-  int32_t turn_signal_;
+  //int32_t turn_signal_;
 
   // Turning state information.
   //   - during right sound playback : RIGHT
@@ -107,6 +136,19 @@ private:
   void callbackAwapiVehicleState(
     const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg);
   void callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg);
+  void onAutowareInitializationMessage(const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg);
+  void onRoutingStateMessage(const autoware_adapi_v1_msgs::msg::RouteState::ConstSharedPtr msg);
+  void onRoutingRouteMessage(const autoware_adapi_v1_msgs::msg::Route::ConstSharedPtr msg);
+  void onDaignosticsStructMessage(const autoware_adapi_v1_msgs::msg::DiagGraphStruct::ConstSharedPtr msg);
+  void onDaignosticsStateMessage(const autoware_adapi_v1_msgs::msg::DiagGraphStatus::ConstSharedPtr msg);
+  void onOperationModeStateMessage(const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg);
+  void onVehicleStateMessage(const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg);
+  void onDeliveryReservationMessage(const autoware_state_machine_msgs::msg::StateLock::ConstSharedPtr msg);
+  void onEngageProcessMessage(const eve_cmd_gate_msgs::msg::EngageRequestState::ConstSharedPtr msg);
+  void onVehicleKinematicsMessage(const autoware_adapi_v1_msgs::msg::VehicleKinematics::ConstSharedPtr msg);
+  void onVehicleStatusMessage(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
+//  void onPlanningFactorsMessage(const tier4_planning_msgs::msg::PlanningFactorArray::ConstSharedPtr msg);
+  void onPlanningFactorsMessage(const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg);
 
   void publishSoundDone(void);
 
@@ -144,6 +186,65 @@ private:
   std::string pre_sound_filename_ = "";
 
   std::string sound_directory_path_ = "";
+
+  // StateMachine
+  bool isAutowareStateOfInitializingVehicle(void);
+  bool isAutowareStateOfWaitingForRoute(void);
+  bool isAutowareStateOfPlanning(void);
+  bool isAutowareStateOfWaitingForEngage(void);
+  bool isAutowareStateOfDriving(void);
+  bool isAutowareStateOfArrivedGoal(void);
+  bool updateStateOfInitializingVehicle(void);
+  bool updateState4WaitingForRoute(void);
+  bool updateState4Planning(void);
+  bool updateState4WaitingForEngage(void);
+  bool updateState4Drivig(void);
+  bool updateState4ArrivedGoal(void);
+  bool changeCheckNodeAlive(void);
+  bool changeStateDuringWakeUp(void);
+  bool changeStateDuringReceiveRoute(void);
+  bool changeStateWaitingEngageInstruction(void);
+  bool changeStateWaitingCallPermission(void);
+  bool changeStateInformEngage(void);
+  bool changeStateInstructEngage(void);
+  bool changeStateRunning(void);
+  bool changeStateTurningLeft(void);
+  bool changeStateTurningRight(void);
+  bool changeStateInformRestart(void);
+  bool changeStateRunningTowardStopLine(void);
+  bool changeStateRunningTowardObstacle(void);
+  bool changeStateStopDuetoTrafficCondition(void);
+  bool changeStateStopDuetoApproachingObstacle(void);
+  bool changeStateStopDuetoSurroundingProximity(void);
+  bool changeStateArrivedGoal(void);
+  void changeState();
+
+  std::shared_mutex mtx_;
+  bool is_engage_requesting_;
+  bool is_engage_accepted_;
+  uint16_t service_layer_state_;
+  uint16_t control_layer_state_;
+  uint16_t initilization_state_;
+  uint16_t routing_state_;
+  uint16_t routing_data_size_;
+  uint16_t delivery_reservation_state_;
+  std::optional<uint16_t> em_holding_indices_;
+  bool em_holding_;
+  autoware_adapi_v1_msgs::msg::OperationModeState operation_state_;
+  bool flag_calls_vehicle_voice_;
+  double dist_to_stop_pose_min_th_;
+  //std::string stop_reason_;
+  double dist_to_stop_pose_;
+  double velocity_;
+  geometry_msgs::msg::Pose vehicle_pose_;
+  double engage_threshold_velocity_;
+  autoware_adapi_v1_msgs::msg::TurnIndicators::_status_type turn_signal_;
+  bool is_stop_reason_;
+  bool is_obstacle_stop_;
+  bool is_detection_area_;
+  bool is_crosswalk_;
+  bool is_surround_obstacle_check_;
+  bool one_play_done_flag_;
 
 protected:
   bool is_playing_sound_initialpose_;
