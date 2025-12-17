@@ -30,18 +30,6 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   // Add a value of 0.05 to `stop_dist_to_prohibit_engage`.
   dist_to_stop_pose_min_th_ = stop_dist_to_prohibit_engage + 0.05;
 
-//  sub_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateMachine>(
-//    "/autoware_state_machine/state",
-//    rclcpp::QoS{3}.transient_local(),
-//    std::bind(&AdSoundManager::callbackAutowareStateMachine, this, std::placeholders::_1)
-//  );
-
-//  sub_awapi_vehicle_state_ = this->create_subscription<tier4_api_msgs::msg::AwapiVehicleStatus>(
-//    "/awapi/vehicle/get/status",
-//    rclcpp::QoS{1},
-//    std::bind(&AdSoundManager::callbackAwapiVehicleState, this, std::placeholders::_1)
-//  );
-
   sub_voice_res_ = this->create_subscription<audio_driver_msgs::msg::SoundDriverRes>(
     "/sound_voice_alarm/audio_res",
     rclcpp::QoS{3}.transient_local(),
@@ -107,8 +95,8 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   );
 
   // engage process state
-  sub_engage_process_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateMachine>(
-    "xxxxx/xxxx",
+  sub_engage_process_state_ = this->create_subscription<eve_cmd_gate_msgs::msg::EngageRequestState>(
+    "/eve_cmd_gate/engage_request_state",
     rclcpp::QoS{3}.transient_local(),
     std::bind(&AdSoundManager::onEngageProcessMessage, this, std::placeholders::_1)
   );
@@ -128,11 +116,17 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   );
 
   // stop reasons
+  sub_planning_factors_ = this->create_subscription<tier4_api_msgs::msg::AwapiAutowareStatus>(
+        "/awapi/autoware/get/status", rclcpp::QoS{1},
+    std::bind(&AdSoundManager::onPlanningFactorsMessage, this, std::placeholders::_1)
+  );
+/*
   sub_planning_factors_ = this->create_subscription<tier4_planning_msgs::msg::PlanningFactorArray>(
-    "/planning/planning_factors",
+    "/api/external/get/planning_factors",
     rclcpp::QoS{3}.transient_local(),
     std::bind(&AdSoundManager::onPlanningFactorsMessage, this, std::placeholders::_1)
   );
+*/
 
   pub_voice_cmd_ = this->create_publisher<audio_driver_msgs::msg::SoundDriverCtrl>(
     "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local());
@@ -456,17 +450,16 @@ void AdSoundManager::onDeliveryReservationMessage(
 }
 
 void AdSoundManager::onEngageProcessMessage(
-  const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg)
+  const eve_cmd_gate_msgs::msg::EngageRequestState::ConstSharedPtr msg)
 {
-//  is_engage_requesting_ = msg->request;
-//  is_engage_accepted_ = msg->accept;
+  is_engage_requesting_ = msg->is_engage_requesting;
+  is_engage_accepted_ = msg->is_engage_accepted;
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
     *this->get_clock(), 1.0,
     "[AdSoundManager::onEngageProcessMessage]"
     "request: %u, accept: %u",
-    msg->service_layer_state, msg->control_layer_state);
-//    is_engage_requesting_, is_engage_accepted_);
+    is_engage_requesting_, is_engage_accepted_);
 
   changeState();
 }
@@ -505,15 +498,16 @@ void AdSoundManager::onVehicleStatusMessage(
 }
 
 void AdSoundManager::onPlanningFactorsMessage(
-  const tier4_planning_msgs::msg::PlanningFactorArray::ConstSharedPtr msg)
+    const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg)
+  //  const tier4_planning_msgs::msg::PlanningFactorArray::ConstSharedPtr msg)
 {
   bool is_other_factor = false;
   is_obstacle_stop_ = false;
   is_detection_area_ = false;
   is_crosswalk_ = false;
   is_surround_obstacle_check_ = false;
-  for (const auto & factor : msg->factors) {
 /*
+  for (const auto & factor : msg->factors) {
     if (factor.behavior_type == tier4_planning_msgs::msg::PlanningFactor::STOP) {
       if (factor.behavior_name == tier4_planning_msgs::msg::PlanningFactor::ROUTE_OBSTACLE) {
         is_obstacle_stop_ = true;
@@ -535,16 +529,18 @@ void AdSoundManager::onPlanningFactorsMessage(
         is_other_factor = true;
       }
     }
-*/
   }
+*/
   is_stop_reason_ = is_obstacle_stop_ | is_detection_area_ | is_crosswalk_ | is_surround_obstacle_check_ | is_other_factor;
 
+  /*
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
     *this->get_clock(), 1.0,
     "[AdSoundManager::onPlanningFactorsMessage]"
     "size: %lu, is_stop_reason: %u, is_obstacle_stop: %u, is_detection_area_: %u, is_crosswalk_: %u, is_surround_obstacle_check_: %u",
     msg->factors.size(), is_stop_reason_, is_obstacle_stop_, is_detection_area_, is_crosswalk_, is_surround_obstacle_check_);
+  */
 
   changeState();
 }

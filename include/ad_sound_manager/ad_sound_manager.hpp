@@ -39,6 +39,9 @@
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include "tier4_planning_msgs/msg/stop_reason_array.hpp"
 #include <tier4_planning_msgs/msg/planning_factor_array.hpp>
+#include <eve_cmd_gate_msgs/msg/engage_request_state.hpp>
+#include "tier4_api_msgs/msg/awapi_autoware_status.hpp"
+
 
 
 #define VOLUME_VOICE_ALARM          (1.0)
@@ -95,10 +98,11 @@ private:
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::OperationModeState>::SharedPtr sub_operation_mode_state_;
   rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr sub_calls_vehicle_state_;
   rclcpp::Subscription<autoware_state_machine_msgs::msg::StateLock>::SharedPtr sub_delivery_reservation_state_;
-  rclcpp::Subscription<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr sub_engage_process_state_;
+  rclcpp::Subscription<eve_cmd_gate_msgs::msg::EngageRequestState>::SharedPtr sub_engage_process_state_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleKinematics>::SharedPtr sub_vehicle_kinematics_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>::SharedPtr sub_vehicle_status_;
-  rclcpp::Subscription<tier4_planning_msgs::msg::PlanningFactorArray>::SharedPtr sub_planning_factors_;
+//  rclcpp::Subscription<tier4_planning_msgs::msg::PlanningFactorArray>::SharedPtr sub_planning_factors_;
+  rclcpp::Subscription<tier4_api_msgs::msg::AwapiAutowareStatus>::SharedPtr sub_planning_factors_;
   rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
 
@@ -140,10 +144,11 @@ private:
   void onOperationModeStateMessage(const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg);
   void onVehicleStateMessage(const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg);
   void onDeliveryReservationMessage(const autoware_state_machine_msgs::msg::StateLock::ConstSharedPtr msg);
-  void onEngageProcessMessage(const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg);
+  void onEngageProcessMessage(const eve_cmd_gate_msgs::msg::EngageRequestState::ConstSharedPtr msg);
   void onVehicleKinematicsMessage(const autoware_adapi_v1_msgs::msg::VehicleKinematics::ConstSharedPtr msg);
   void onVehicleStatusMessage(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
-  void onPlanningFactorsMessage(const tier4_planning_msgs::msg::PlanningFactorArray::ConstSharedPtr msg);
+//  void onPlanningFactorsMessage(const tier4_planning_msgs::msg::PlanningFactorArray::ConstSharedPtr msg);
+  void onPlanningFactorsMessage(const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg);
 
   void publishSoundDone(void);
 

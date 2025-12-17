@@ -38,6 +38,7 @@
   <depend>diagnostic_msgs</depend>
   <depend>go_interface_msgs</depend>
   <depend>autoware_vehicle_msgs</depend>
+  <depend>eve_cmd_gate_msgs</depend>
 
 
   <test_depend>ament_cmake_ros</test_depend>
