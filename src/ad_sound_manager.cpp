@@ -25,17 +25,70 @@ namespace ad_sound_manager
 AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
 : Node("ad_sound_manager", options)
 {
-  sub_state_ = this->create_subscription<autoware_state_machine_msgs::msg::StateMachine>(
-    "/autoware_state_machine/state",
-    rclcpp::QoS{3}.transient_local(),
-    std::bind(&AdSoundManager::callbackAutowareStateMachine, this, std::placeholders::_1)
+  // ============================================================
+  // Subscriptions - New ADAPI v1
+  // ============================================================
+
+  // For: /api/motion/state
+  sub_motion_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::MotionState>(
+    "/api/motion/state",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackMotionState, this, std::placeholders::_1)
   );
 
-  sub_awapi_vehicle_state_ = this->create_subscription<tier4_api_msgs::msg::AwapiVehicleStatus>(
-    "/awapi/vehicle/get/status",
-    rclcpp::QoS{1},
-    std::bind(&AdSoundManager::callbackAwapiVehicleState, this, std::placeholders::_1)
+  // For: /api/vehicle/status
+  sub_adapi_vehicle_status_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>(
+    "/api/vehicle/status",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackAdapiVehicleStatus, this, std::placeholders::_1)
   );
+
+  // For: /api/routing/state
+  sub_route_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::RouteState>(
+    "/api/routing/state",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackRouteState, this, std::placeholders::_1)
+  );
+
+  // For: /api/localization/initialization_state
+  sub_localization_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>(
+    "/api/localization/initialization_state",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackLocalizationState, this, std::placeholders::_1)
+  );
+
+  // For: /api/operation_mode/state
+  sub_operation_mode_state_ = this->create_subscription<autoware_adapi_v1_msgs::msg::OperationModeState>(
+    "/api/operation_mode/state",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackOperationModeState, this, std::placeholders::_1)
+  );
+
+  // ============================================================
+  // Subscriptions - go_interface
+  // ============================================================
+
+  // For: external system integration (voice_flg, lock_flg)
+  sub_go_interface_vehicle_status_ = this->create_subscription<go_interface_msgs::msg::VehicleStatus>(
+    "/api_vehicle_status",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackGoInterfaceVehicleStatus, this, std::placeholders::_1)
+  );
+
+  // ============================================================
+  // Subscriptions - Legacy (TODO: Replace with planning_factors)
+  // ============================================================
+
+  // TODO: Replace with /api/external/get/planning_factors
+  sub_awapi_autoware_status_ = this->create_subscription<tier4_api_msgs::msg::AwapiAutowareStatus>(
+    "/awapi/autoware/get/status",
+    rclcpp::QoS{1}.transient_local(),
+    std::bind(&AdSoundManager::callbackAwapiAutowareStatus, this, std::placeholders::_1)
+  );
+
+  // ============================================================
+  // Subscriptions - Other
+  // ============================================================
 
   sub_voice_res_ = this->create_subscription<audio_driver_msgs::msg::SoundDriverRes>(
     "/sound_voice_alarm/audio_res",
@@ -170,18 +223,7 @@ void AdSoundManager::publishSoundDone(void)
   one_play_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
 }
 
-void AdSoundManager::callbackAutowareStateMachine(
-  const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg)
-{
-  RCLCPP_INFO_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(), 1.0,
-    "[AdSoundManager::callback]service_layer_state: %u, control_layer_state: %u",
-    msg->service_layer_state,
-    msg->control_layer_state);
-
-  changeSoundState(msg->service_layer_state, msg->control_layer_state, false);
-}
+// callbackAutowareStateMachine() removed - replaced by updateAutowareStateFromTopics()
 
 void AdSoundManager::callbackVoiceRes(
   const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg)
@@ -192,9 +234,22 @@ void AdSoundManager::callbackVoiceRes(
     "[AdSoundManager::callbackVoiceRes]callbackVoiceRes");
 
   // Done information is returned only after one-time playback.
+  if (one_play_state_ ==
+    autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL)
+  {
+    RCLCPP_INFO(this->get_logger(),
+      "[DEBUG] Arrival sound completed, transitioning to STATE_DURING_RECEIVE_ROUTE");
+    publishSoundDone();
+    // 到着音声再生完了後、STATE_DURING_RECEIVE_ROUTE に遷移（BGM停止）
+    changeSoundState(
+      autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE,
+      cur_control_layer_state_,
+      false);
+    return;
+  }
+
   if ( (one_play_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
-    (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL) ||
     (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
     (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART) )
   {
@@ -209,14 +264,7 @@ void AdSoundManager::callbackVoiceRes(
   }
 }
 
-void AdSoundManager::callbackAwapiVehicleState(
-  const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg)
-{
-  if (turn_signal_ != msg->turn_signal) {
-    turn_signal_ = msg->turn_signal;
-    changeSoundState(cur_service_layer_state_, cur_control_layer_state_, true);
-  }
-}
+// callbackAwapiVehicleState() removed - replaced by callbackAdapiVehicleStatus()
 
 void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg)
 {
@@ -306,6 +354,11 @@ void AdSoundManager::changeSoundState(
   const uint8_t control_layer_state,
   bool force)
 {
+  // DEBUG: Log changeSoundState entry
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] changeSoundState() called: service=%u, control=%u, force=%d",
+    service_layer_state, control_layer_state, force);
+
   prev_service_layer_state_ = cur_service_layer_state_;
   prev_control_layer_state_ = cur_control_layer_state_;
   cur_service_layer_state_ = service_layer_state;
@@ -337,6 +390,8 @@ void AdSoundManager::changeSoundState(
         // Turn signal information is used only when state is STATE_RUNNING_TOWARD_STOP_LINE,
         //   STATE_RUNNING_TOWARD_OBSTACLE or STATE_STOP_DUETO_TRAFFIC_CONDITION. If the state is
         //   other than that, return immediately.
+        RCLCPP_DEBUG(this->get_logger(),
+          "[DEBUG] changeSoundState() early return: force=true but state not applicable");
         return;
       }
     } else {
@@ -345,14 +400,24 @@ void AdSoundManager::changeSoundState(
       if ((cur_control_layer_state_ == prev_control_layer_state_) ||
         is_ignore_control_layer_state)
       {
+        RCLCPP_DEBUG(this->get_logger(),
+          "[DEBUG] changeSoundState() early return: state unchanged (service=%u, control=%u, is_ignore=%d)",
+          cur_service_layer_state_, cur_control_layer_state_, is_ignore_control_layer_state);
         return;
       }
     }
   }
 
+  // DEBUG: Log state change will be processed
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] changeSoundState() processing state change: prev_service=%u -> cur_service=%u, control=%u",
+    prev_service_layer_state_, cur_service_layer_state_, cur_control_layer_state_);
+
   if (!is_ignore_control_layer_state &&
     (cur_control_layer_state_ == autoware_state_machine_msgs::msg::StateMachine::MANUAL))
   {
+    RCLCPP_INFO(this->get_logger(),
+      "[DEBUG] changeSoundState() MANUAL mode, stopping voice");
     continuity_state_ = false;
     playLoopNoBGM(sound_filename_bgm_);
     pub_voice_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
@@ -365,8 +430,15 @@ void AdSoundManager::changeSoundState(
   const bool is_cut_in_voice =
     (pre_sound_type == PreSoundType::TURN_LEFTRIGHT_SOUND) ||
     (pre_sound_type == PreSoundType::STOP_REASON_SOUND);
+  // DEBUG: Log switch state
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] changeSoundState() switch: cur_service_layer_state_=%u", cur_service_layer_state_);
+
   switch (cur_service_layer_state_) {
     case autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE:
+      RCLCPP_WARN(this->get_logger(),
+        "[DEBUG] === WAKEUP SOUND === STATE_CHECK_NODE_ALIVE, playing: %s",
+        sound_filename_wakeup_.c_str());
       continuity_state_ = false;
       one_play_state_ = cur_service_layer_state_;
       playOneshotVoice(sound_filename_wakeup_);
@@ -393,6 +465,9 @@ void AdSoundManager::changeSoundState(
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE:
     case autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART:
+      RCLCPP_WARN(this->get_logger(),
+        "[DEBUG] === START SOUND === STATE_INFORM_ENGAGE/RESTART, playing: %s, one_play_state_=%u",
+        sound_filename_start_.c_str(), cur_service_layer_state_);
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
       one_play_state_ = cur_service_layer_state_;
@@ -500,6 +575,9 @@ void AdSoundManager::changeSoundState(
       pre_sound_filename_ = "";
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL:
+      RCLCPP_WARN(this->get_logger(),
+        "[DEBUG] === ARRIVAL SOUND === STATE_ARRIVED_GOAL, playing: %s",
+        sound_filename_arrival_.c_str());
       pub_voice_cmd_->publish(initAudioCmd(sdc_msg_.CMD_STOP));
       continuity_state_ = false;
       one_play_state_ = cur_service_layer_state_;
@@ -517,6 +595,286 @@ void AdSoundManager::changeSoundState(
     default:
       break;
   }
+}
+
+// ============================================================
+// Callback functions - New ADAPI v1
+// ============================================================
+
+void AdSoundManager::callbackMotionState(
+  const autoware_adapi_v1_msgs::msg::MotionState::ConstSharedPtr msg)
+{
+  prev_motion_state_ = motion_state_;
+  motion_state_ = *msg;
+
+  // DEBUG: Log motion state
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] callbackMotionState: state=%u (0:UNKNOWN, 1:STOPPED, 2:STARTING, 3:MOVING), prev=%u",
+    motion_state_.state, prev_motion_state_.state);
+
+  // Call updateAutowareStateFromTopics() when state changes
+  if (prev_motion_state_.state != motion_state_.state) {
+    RCLCPP_INFO(this->get_logger(),
+      "[DEBUG] MotionState CHANGED: %u -> %u, calling updateAutowareStateFromTopics()",
+      prev_motion_state_.state, motion_state_.state);
+    updateAutowareStateFromTopics();
+  }
+}
+
+void AdSoundManager::callbackAdapiVehicleStatus(
+  const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg)
+{
+  prev_adapi_vehicle_status_ = adapi_vehicle_status_;
+  adapi_vehicle_status_ = *msg;
+
+  // Call updateAutowareStateFromTopics() when turn_indicators changes
+  if (prev_adapi_vehicle_status_.turn_indicators.status != adapi_vehicle_status_.turn_indicators.status) {
+    updateAutowareStateFromTopics();
+  }
+}
+
+void AdSoundManager::callbackRouteState(
+  const autoware_adapi_v1_msgs::msg::RouteState::ConstSharedPtr msg)
+{
+  prev_route_state_ = route_state_;
+  route_state_ = *msg;
+
+  // DEBUG: Log route state
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] callbackRouteState: state=%u (0:UNKNOWN, 1:UNSET, 2:SET, 3:ARRIVED, 4:CHANGING), prev=%u",
+    route_state_.state, prev_route_state_.state);
+
+  // Call updateAutowareStateFromTopics() when state changes
+  if (prev_route_state_.state != route_state_.state) {
+    RCLCPP_INFO(this->get_logger(),
+      "[DEBUG] RouteState CHANGED: %u -> %u, calling updateAutowareStateFromTopics()",
+      prev_route_state_.state, route_state_.state);
+    updateAutowareStateFromTopics();
+  }
+}
+
+void AdSoundManager::callbackLocalizationState(
+  const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg)
+{
+  using LocalizationState = autoware_adapi_v1_msgs::msg::LocalizationInitializationState;
+  using StateMachine = autoware_state_machine_msgs::msg::StateMachine;
+
+  prev_localization_state_ = localization_state_;
+  localization_state_ = *msg;
+
+  // DEBUG: Log localization state
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] callbackLocalizationState: state=%u (0:UNKNOWN, 1:UNINITIALIZED, 2:INITIALIZING, 3:INITIALIZED), prev=%u",
+    localization_state_.state, prev_localization_state_.state);
+
+  // Call updateAutowareStateFromTopics() when state changes
+  if (prev_localization_state_.state != localization_state_.state) {
+    RCLCPP_INFO(this->get_logger(),
+      "[DEBUG] LocalizationState CHANGED: %u -> %u",
+      prev_localization_state_.state, localization_state_.state);
+
+    // When localization transitions TO INITIALIZED, play wakeup sound (STATE_CHECK_NODE_ALIVE)
+    if (prev_localization_state_.state != LocalizationState::INITIALIZED &&
+        localization_state_.state == LocalizationState::INITIALIZED)
+    {
+      RCLCPP_WARN(this->get_logger(),
+        "[DEBUG] Localization transitioned to INITIALIZED -> triggering STATE_CHECK_NODE_ALIVE (wakeup)");
+      changeSoundState(StateMachine::STATE_CHECK_NODE_ALIVE, cur_control_layer_state_, false);
+    }
+    else {
+      updateAutowareStateFromTopics();
+    }
+  }
+}
+
+void AdSoundManager::callbackOperationModeState(
+  const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg)
+{
+  prev_operation_mode_state_ = operation_mode_state_;
+  operation_mode_state_ = *msg;
+
+  // Call updateAutowareStateFromTopics() when mode or control_enabled changes
+  if (prev_operation_mode_state_.mode != operation_mode_state_.mode ||
+      prev_operation_mode_state_.is_autoware_control_enabled != operation_mode_state_.is_autoware_control_enabled)
+  {
+    updateAutowareStateFromTopics();
+  }
+}
+
+// ============================================================
+// Callback functions - go_interface
+// ============================================================
+
+void AdSoundManager::callbackGoInterfaceVehicleStatus(
+  const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg)
+{
+  prev_go_interface_vehicle_status_ = go_interface_vehicle_status_;
+  go_interface_vehicle_status_ = *msg;
+
+  // Call updateAutowareStateFromTopics() when voice_flg or lock_flg changes
+  if (prev_go_interface_vehicle_status_.voice_flg != go_interface_vehicle_status_.voice_flg ||
+      prev_go_interface_vehicle_status_.lock_flg != go_interface_vehicle_status_.lock_flg)
+  {
+    updateAutowareStateFromTopics();
+  }
+}
+
+// ============================================================
+// Callback functions - Legacy (TODO: Replace with planning_factors)
+// ============================================================
+
+void AdSoundManager::callbackAwapiAutowareStatus(
+  const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg)
+{
+  awapi_autoware_status_ = *msg;
+
+  // TODO: Replace with /api/external/get/planning_factors for stop reason detection
+}
+
+// ============================================================
+// State conversion function
+// ============================================================
+
+void AdSoundManager::updateAutowareStateFromTopics(void)
+{
+  // This function converts new ADAPI v1 states to legacy service_layer_state and control_layer_state
+  // and calls changeSoundState()
+
+  using StateMachine = autoware_state_machine_msgs::msg::StateMachine;
+  using MotionState = autoware_adapi_v1_msgs::msg::MotionState;
+  using RouteState = autoware_adapi_v1_msgs::msg::RouteState;
+  using LocalizationState = autoware_adapi_v1_msgs::msg::LocalizationInitializationState;
+  using OperationMode = autoware_adapi_v1_msgs::msg::OperationModeState;
+  using TurnIndicators = autoware_adapi_v1_msgs::msg::TurnIndicators;
+
+  // ワンショット音声再生中は状態遷移をスキップ
+  // STATE_CHECK_NODE_ALIVE (wakeup), STATE_ARRIVED_GOAL (arrival),
+  // STATE_INFORM_ENGAGE, STATE_INFORM_RESTART の音声再生中は状態を変えない
+  if (one_play_state_ == StateMachine::STATE_ARRIVED_GOAL ||
+      one_play_state_ == StateMachine::STATE_CHECK_NODE_ALIVE ||
+      one_play_state_ == StateMachine::STATE_INFORM_ENGAGE ||
+      one_play_state_ == StateMachine::STATE_INFORM_RESTART)
+  {
+    RCLCPP_DEBUG(this->get_logger(),
+      "[DEBUG] One-shot sound playing (state=%u), skipping state update", one_play_state_);
+    return;
+  }
+
+  // DEBUG: Log current ADAPI states
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] updateAutowareStateFromTopics() called with:\n"
+    "  localization_state=%u, route_state=%u, motion_state=%u\n"
+    "  operation_mode=%u, is_autoware_control_enabled=%d",
+    localization_state_.state, route_state_.state, motion_state_.state,
+    operation_mode_state_.mode, operation_mode_state_.is_autoware_control_enabled);
+
+  // ============================================================
+  // Derive control_layer_state
+  // ============================================================
+  uint8_t control_layer_state = StateMachine::MANUAL;
+  std::string control_reason = "default MANUAL";
+  if (operation_mode_state_.mode == OperationMode::AUTONOMOUS &&
+      operation_mode_state_.is_autoware_control_enabled)
+  {
+    control_layer_state = StateMachine::AUTO;
+    control_reason = "AUTONOMOUS + control_enabled";
+  } else if (operation_mode_state_.mode != OperationMode::AUTONOMOUS) {
+    control_reason = "mode is not AUTONOMOUS (mode=" + std::to_string(operation_mode_state_.mode) + ")";
+  } else if (!operation_mode_state_.is_autoware_control_enabled) {
+    control_reason = "AUTONOMOUS but control_enabled=false";
+  }
+  
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] control_layer_state=%u, reason=%s",
+    control_layer_state, control_reason.c_str());
+
+  // ============================================================
+  // Derive service_layer_state (priority order)
+  // ============================================================
+  uint16_t service_layer_state = StateMachine::STATE_UNDEFINED;
+  std::string state_reason = "DEFAULT";
+
+  // TODO: Emergency stop detection
+  // if (emergency_holding) {
+  //   service_layer_state = StateMachine::STATE_EMERGENCY_STOP;
+  // }
+
+  // 1. Localization not initialized
+  // Note: STATE_CHECK_NODE_ALIVE (wakeup) is handled in callbackLocalizationState()
+  //       when localization transitions to INITIALIZED
+  if (localization_state_.state != LocalizationState::INITIALIZED) {
+    service_layer_state = StateMachine::STATE_DURING_WAKEUP;
+    state_reason = "localization not INITIALIZED";
+  }
+  // 2. Arrived at goal
+  else if (route_state_.state == RouteState::ARRIVED) {
+    service_layer_state = StateMachine::STATE_ARRIVED_GOAL;
+    state_reason = "route ARRIVED";
+  }
+  // 3. Route not set or changing
+  else if (route_state_.state == RouteState::UNSET ||
+           route_state_.state == RouteState::CHANGING)
+  {
+    service_layer_state = StateMachine::STATE_DURING_RECEIVE_ROUTE;
+    state_reason = "route UNSET or CHANGING";
+  }
+  // 4. Starting (departure sound)
+  else if (motion_state_.state == MotionState::STARTING) {
+    // No distinction between initial departure and restart
+    service_layer_state = StateMachine::STATE_INFORM_ENGAGE;
+    state_reason = "motion STARTING";
+  }
+  // 5. Waiting for call permission (external system integration)
+  else if (go_interface_vehicle_status_.voice_flg &&
+           go_interface_vehicle_status_.lock_flg)
+  {
+    service_layer_state = StateMachine::STATE_WAITING_CALL_PERMISSION;
+    state_reason = "voice_flg && lock_flg";
+  }
+  // 6. Waiting for engage instruction
+  else if (route_state_.state == RouteState::SET &&
+           control_layer_state == StateMachine::MANUAL)
+  {
+    service_layer_state = StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION;
+    state_reason = "route SET && MANUAL mode";
+  }
+  // 7. Moving
+  else if (motion_state_.state == MotionState::MOVING) {
+    // Check turn indicators
+    if (adapi_vehicle_status_.turn_indicators.status == TurnIndicators::LEFT) {
+      service_layer_state = StateMachine::STATE_TURNING_LEFT;
+      state_reason = "motion MOVING + turn LEFT";
+    } else if (adapi_vehicle_status_.turn_indicators.status == TurnIndicators::RIGHT) {
+      service_layer_state = StateMachine::STATE_TURNING_RIGHT;
+      state_reason = "motion MOVING + turn RIGHT";
+    } else {
+      service_layer_state = StateMachine::STATE_RUNNING;
+      state_reason = "motion MOVING";
+    }
+  }
+  // 8. Stopped
+  else if (motion_state_.state == MotionState::STOPPED) {
+    // TODO: Replace with /api/external/get/planning_factors for stop reason detection
+    // For now, use stop_reason from awapi_autoware_status_ if available
+    // Default to STATE_STOP_DUETO_TRAFFIC_CONDITION
+    service_layer_state = StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION;
+    state_reason = "motion STOPPED";
+  }
+  // 9. Default
+  else {
+    service_layer_state = StateMachine::STATE_UNDEFINED;
+    state_reason = "no match";
+  }
+
+  // DEBUG: Log derived states
+  RCLCPP_INFO(this->get_logger(),
+    "[DEBUG] Derived states: service_layer_state=%u, control_layer_state=%u, reason=%s\n"
+    "  (prev_service=%u, prev_control=%u)",
+    service_layer_state, control_layer_state, state_reason.c_str(),
+    cur_service_layer_state_, cur_control_layer_state_);
+
+  // Call changeSoundState with derived states
+  changeSoundState(service_layer_state, control_layer_state, false);
 }
 
 }  // namespace ad_sound_manager
