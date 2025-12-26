@@ -32,6 +32,9 @@
   <!-- New ADAPI v1 messages -->
   <depend>autoware_adapi_v1_msgs</depend>
 
+  <!-- System messages -->
+  <depend>autoware_system_msgs</depend>
+
   <!-- go_interface messages (external system integration) -->
   <depend>go_interface_msgs</depend>
 
