@@ -28,11 +28,26 @@
 
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
+
+  <!-- New ADAPI v1 messages -->
+  <depend>autoware_adapi_v1_msgs</depend>
+
+  <!-- System messages -->
+  <depend>autoware_system_msgs</depend>
+
+  <!-- go_interface messages (external system integration) -->
+  <depend>go_interface_msgs</depend>
+
+  <!-- Legacy messages (to be removed after migration) -->
   <depend>tier4_vehicle_msgs</depend>
   <depend>tier4_api_msgs</depend>
-  <depend>audio_driver_msgs</depend>
   <depend>autoware_state_machine_msgs</depend>
   <depend>tier4_external_api_msgs</depend>
+
+  <!-- Audio driver messages -->
+  <depend>audio_driver_msgs</depend>
+
+  <!-- Other messages -->
   <depend>sound_msgs</depend>
 
   <test_depend>ament_cmake_ros</test_depend>

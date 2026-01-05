@@ -47,8 +47,9 @@ if(BUILD_TESTING)
     ${PROJECT_NAME}
   )
   target_include_directories(test_${PROJECT_NAME} PRIVATE
-  src
-)
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
 endif()
 
 ament_auto_package(INSTALL_TO_SHARE
