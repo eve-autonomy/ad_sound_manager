@@ -728,6 +728,18 @@ void AdSoundManager::callbackMotionState(
   prev_motion_state_ = motion_state_;
   motion_state_ = *msg;
 
+  // Detect restart: STOPPED -> MOVING transition after driving has started
+  // This handles the case where STARTING state is skipped
+  if (prev_motion_state_.state == MotionState::STOPPED &&
+      motion_state_.state == MotionState::MOVING &&
+      has_started_driving_ &&
+      !is_playing_restart_sound_)
+  {
+    RCLCPP_WARN(this->get_logger(),
+      "[DEBUG] Detected restart (STOPPED->MOVING), triggering restart sound");
+    is_playing_restart_sound_ = true;
+  }
+
   // Track if driving has started (motion=MOVING occurred)
   // Also clear engage_sound_completed_ flag when motion becomes MOVING
   if (motion_state_.state == MotionState::MOVING) {

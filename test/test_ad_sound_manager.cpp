@@ -116,24 +116,24 @@ private:
   static rclcpp::NodeOptions setupNodeOptions()
   {
     rclcpp::NodeOptions node_options;
-    node_options.parameter_overrides().push_back(rclcpp::Parameter(
-      "sound_filename_avoid", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(rclcpp::Parameter(
-      "sound_filename_start", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(
-      rclcpp::Parameter("sound_filename_left", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(rclcpp::Parameter(
-      "sound_filename_right", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(
-      rclcpp::Parameter("sound_filename_bgm", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(rclcpp::Parameter(
-      "sound_filename_obstacle", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(rclcpp::Parameter(
-      "sound_filename_alert_imu_initialize", rclcpp::ParameterValue("alert_imu_initialize.wav")));
-    node_options.parameter_overrides().push_back(rclcpp::Parameter(
-      "sound_directory_path",
-      rclcpp::ParameterValue(
-        "/home/masahirokubota/eve/v4.4.0/pilot-auto.x1.eve/src/x1/dataset/ad_sound/wavs/ja")));
+    // Use environment-independent test directory (same as TestableAdSoundManager)
+    const std::string test_sound_file = "test.wav";
+    const std::string test_sound_dir = "/tmp/ad_sound_manager_test/";
+
+    node_options.parameter_overrides({
+      rclcpp::Parameter("sound_filename_avoid", test_sound_file),
+      rclcpp::Parameter("sound_filename_start", test_sound_file),
+      rclcpp::Parameter("sound_filename_left", test_sound_file),
+      rclcpp::Parameter("sound_filename_right", test_sound_file),
+      rclcpp::Parameter("sound_filename_bgm", test_sound_file),
+      rclcpp::Parameter("sound_filename_obstacle", test_sound_file),
+      rclcpp::Parameter("sound_filename_wakeup", test_sound_file),
+      rclcpp::Parameter("sound_filename_leave", test_sound_file),
+      rclcpp::Parameter("sound_filename_arrival", test_sound_file),
+      rclcpp::Parameter("sound_filename_call", test_sound_file),
+      rclcpp::Parameter("sound_filename_alert_imu_initialize", test_sound_file),
+      rclcpp::Parameter("sound_directory_path", test_sound_dir),
+    });
     return node_options;
   }
 };
@@ -537,8 +537,10 @@ TEST_F(StateTransitionTest, HasStartedDrivingFlag_ResetWhenRouteUnset)
 // DT_3_4
 TEST(AdSoundManagerTest, DT_3_4_1)
 {
+  // Create test directory and file
+  system("mkdir -p /tmp/ad_sound_manager_test && touch /tmp/ad_sound_manager_test/test.wav");
+
   rclcpp::init(0, nullptr);
-  int count = 0;
   audio_driver_msgs::msg::SoundDriverCtrl sound_driver_ctrl;
   auto node = std::make_shared<AdSoundManagerTest>();
   auto test_node = rclcpp::Node::make_shared("test_node");
@@ -558,19 +560,14 @@ TEST(AdSoundManagerTest, DT_3_4_1)
   sound_request.stamp = rclcpp::Clock().now();
   sound_request.sound_type = "alert_imu_initialize";
   publisher->publish(sound_request);
-  const auto timeout = std::chrono::seconds(5);
-  const auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < 2; i++) {
     executor.spin_some();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
   EXPECT_EQ(sound_driver_ctrl.cmd_type, audio_driver_msgs::msg::SoundDriverCtrl::CMD_PLAY);
   EXPECT_EQ(sound_driver_ctrl.volume, 1.0);
-  // TODO(kubota): ファイルパスがローカルに依存しているのでどうにかする。
-  EXPECT_EQ(
-    sound_driver_ctrl.file_path,
-    "/home/masahirokubota/eve/v4.4.0/pilot-auto.x1.eve/src/x1/dataset/ad_sound/wavs/ja/"
-    "alert_imu_initialize.wav");
+  // Use environment-independent test path
+  EXPECT_EQ(sound_driver_ctrl.file_path, "/tmp/ad_sound_manager_test/test.wav");
   EXPECT_EQ(sound_driver_ctrl.is_loop, false);
   EXPECT_EQ(sound_driver_ctrl.loop_delay, 0.0);
   EXPECT_EQ(sound_driver_ctrl.start_delay, 0.0);
@@ -580,8 +577,10 @@ TEST(AdSoundManagerTest, DT_3_4_1)
 // DT_3_8
 TEST(AdSoundManagerTest, DT_3_8_1)
 {
+  // Create test directory and file
+  system("mkdir -p /tmp/ad_sound_manager_test && touch /tmp/ad_sound_manager_test/test.wav");
+
   rclcpp::init(0, nullptr);
-  int count = 0;
   tier4_external_api_msgs::msg::ResponseStatus response;
   auto node = std::make_shared<AdSoundManagerTest>();
   auto test_node = rclcpp::Node::make_shared("test_node");
@@ -596,9 +595,19 @@ TEST(AdSoundManagerTest, DT_3_8_1)
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(node);
   executor.add_node(test_node);
+
+  // First, complete the wakeup sound (triggered at node startup)
+  audio_driver_msgs::msg::SoundDriverRes wakeup_response;
+  publisher->publish(wakeup_response);
+  for (int i = 0; i < 2; i++) {
+    executor.spin_some();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+
+  // Now set the initialpose sound flag and publish another response
   node->setIsPlayingSoundInitialpose(true);
-  audio_driver_msgs::msg::SoundDriverRes response_status;
-  publisher->publish(response_status);
+  audio_driver_msgs::msg::SoundDriverRes initialpose_response;
+  publisher->publish(initialpose_response);
   for (int i = 0; i < 2; i++) {
     executor.spin_some();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
