@@ -20,6 +20,7 @@
 #include <autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp>
 #include <autoware_adapi_v1_msgs/msg/operation_mode_state.hpp>
 #include <autoware_adapi_v1_msgs/msg/vehicle_status.hpp>
+#include <autoware_adapi_v1_msgs/msg/turn_indicators.hpp>
 #include <autoware_state_machine_msgs/msg/state_machine.hpp>
 #include <autoware_system_msgs/msg/hazard_status_stamped.hpp>
 #include <audio_driver_msgs/msg/sound_driver_res.hpp>
@@ -29,6 +30,7 @@ using RouteState = autoware_adapi_v1_msgs::msg::RouteState;
 using LocalizationState = autoware_adapi_v1_msgs::msg::LocalizationInitializationState;
 using OperationModeState = autoware_adapi_v1_msgs::msg::OperationModeState;
 using VehicleStatus = autoware_adapi_v1_msgs::msg::VehicleStatus;
+using TurnIndicators = autoware_adapi_v1_msgs::msg::TurnIndicators;
 using StateMachine = autoware_state_machine_msgs::msg::StateMachine;
 using HazardStatusStamped = autoware_system_msgs::msg::HazardStatusStamped;
 using SoundDriverRes = audio_driver_msgs::msg::SoundDriverRes;
@@ -167,10 +169,12 @@ protected:
       "/api/localization/initialization_state", rclcpp::QoS{1}.transient_local());
     operation_mode_pub_ = test_node_->create_publisher<OperationModeState>(
       "/api/operation_mode/state", rclcpp::QoS{1}.transient_local());
+    vehicle_status_pub_ = test_node_->create_publisher<VehicleStatus>(
+      "/api/vehicle/status", rclcpp::SensorDataQoS());
     sound_res_pub_ = test_node_->create_publisher<SoundDriverRes>(
       "/sound_voice_alarm/audio_res", rclcpp::QoS{3}.transient_local());
     hazard_status_pub_ = test_node_->create_publisher<HazardStatusStamped>(
-      "/system/emergency/hazard_status", rclcpp::QoS{1}.transient_local());
+      "/system/emergency/hazard_status", rclcpp::QoS{1});
 
     // Wait for connections to establish
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -242,6 +246,14 @@ protected:
     spinOnce(3);
   }
 
+  void publishVehicleStatus(uint8_t turn_indicators)
+  {
+    auto msg = VehicleStatus();
+    msg.turn_indicators.status = turn_indicators;
+    vehicle_status_pub_->publish(msg);
+    spinOnce(3);
+  }
+
   std::shared_ptr<TestableAdSoundManager> node_;
   std::shared_ptr<rclcpp::Node> test_node_;
 
@@ -249,6 +261,7 @@ protected:
   rclcpp::Publisher<RouteState>::SharedPtr route_pub_;
   rclcpp::Publisher<LocalizationState>::SharedPtr localization_pub_;
   rclcpp::Publisher<OperationModeState>::SharedPtr operation_mode_pub_;
+  rclcpp::Publisher<VehicleStatus>::SharedPtr vehicle_status_pub_;
   rclcpp::Publisher<SoundDriverRes>::SharedPtr sound_res_pub_;
   rclcpp::Publisher<HazardStatusStamped>::SharedPtr hazard_status_pub_;
 };
@@ -528,6 +541,71 @@ TEST_F(StateTransitionTest, HasStartedDrivingFlag_ResetWhenRouteUnset)
   publishRoute(RouteState::UNSET);
 
   EXPECT_FALSE(node_->hasStartedDriving());
+}
+
+// ============================================================
+// Turn Indicator Tests (Right/Left Turn Sound)
+// ============================================================
+
+// Test: When turn_indicators=RIGHT during MOVING, transition to STATE_TURNING_RIGHT
+TEST_F(StateTransitionTest, TurnIndicatorsRight_TransitionToTurningRight)
+{
+  // Complete startup to RUNNING
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::SET);
+  publishMotion(MotionState::STOPPED);
+  publishMotion(MotionState::STARTING);
+  publishSoundResponse();
+  publishMotion(MotionState::MOVING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+
+  // Right turn indicator
+  publishVehicleStatus(TurnIndicators::RIGHT);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_TURNING_RIGHT);
+}
+
+// Test: When turn_indicators=LEFT during MOVING, transition to STATE_TURNING_LEFT
+TEST_F(StateTransitionTest, TurnIndicatorsLeft_TransitionToTurningLeft)
+{
+  // Complete startup to RUNNING
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::SET);
+  publishMotion(MotionState::STOPPED);
+  publishMotion(MotionState::STARTING);
+  publishSoundResponse();
+  publishMotion(MotionState::MOVING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+
+  // Left turn indicator
+  publishVehicleStatus(TurnIndicators::LEFT);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_TURNING_LEFT);
+}
+
+// Test: When turn_indicators changes from RIGHT to DISABLE, transition back to STATE_RUNNING
+TEST_F(StateTransitionTest, TurnIndicatorsDisable_TransitionBackToRunning)
+{
+  // Complete startup to RUNNING, then turn right
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::SET);
+  publishMotion(MotionState::STOPPED);
+  publishMotion(MotionState::STARTING);
+  publishSoundResponse();
+  publishMotion(MotionState::MOVING);
+  publishVehicleStatus(TurnIndicators::RIGHT);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_TURNING_RIGHT);
+
+  // Turn indicator off
+  publishVehicleStatus(TurnIndicators::DISABLE);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
 }
 
 // ============================================================
