@@ -81,9 +81,10 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   // ============================================================
 
   // For: /system/emergency/hazard_status (emergency_holding)
+  // Note: Use QoS{1} (volatile) to match publisher QoS
   sub_hazard_status_ = this->create_subscription<autoware_system_msgs::msg::HazardStatusStamped>(
     "/system/emergency/hazard_status",
-    rclcpp::QoS{1}.transient_local(),
+    rclcpp::QoS{1},
     std::bind(&AdSoundManager::callbackHazardStatus, this, std::placeholders::_1)
   );
 

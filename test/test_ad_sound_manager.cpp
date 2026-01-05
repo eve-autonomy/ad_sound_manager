@@ -174,7 +174,7 @@ protected:
     sound_res_pub_ = test_node_->create_publisher<SoundDriverRes>(
       "/sound_voice_alarm/audio_res", rclcpp::QoS{3}.transient_local());
     hazard_status_pub_ = test_node_->create_publisher<HazardStatusStamped>(
-      "/system/emergency/hazard_status", rclcpp::QoS{1}.transient_local());
+      "/system/emergency/hazard_status", rclcpp::QoS{1});
 
     // Wait for connections to establish
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
