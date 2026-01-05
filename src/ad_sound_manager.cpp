@@ -37,9 +37,10 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   );
 
   // For: /api/vehicle/status
+  // Note: Use SensorDataQoS (BEST_EFFORT + volatile) to match publisher QoS
   sub_adapi_vehicle_status_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>(
     "/api/vehicle/status",
-    rclcpp::QoS{1}.transient_local(),
+    rclcpp::SensorDataQoS(),
     std::bind(&AdSoundManager::callbackAdapiVehicleStatus, this, std::placeholders::_1)
   );
 
@@ -1026,8 +1027,32 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
     service_layer_state = StateMachine::STATE_UNDEFINED;
   }
 
+  // 詳細デバッグログ：全トピック情報を時系列で出力
   RCLCPP_WARN(this->get_logger(),
-    "[DEBUG] updateAutowareStateFromTopics CALLING changeSoundState: derived_service=%s, derived_control=%s",
+    "\n========== [STATE TRANSITION LOG] ==========\n"
+    "  motion_state: %s (prev: %s)\n"
+    "  route_state: %s\n"
+    "  localization_state: %s\n"
+    "  turn_indicators: %d\n"
+    "  has_started_driving: %s\n"
+    "  is_playing_restart_sound: %s\n"
+    "  is_playing_engage_sound: %s\n"
+    "  engage_sound_completed: %s\n"
+    "  voice_flg: %s, lock_flg: %s\n"
+    "  --> derived_service: %s\n"
+    "  --> derived_control: %s\n"
+    "=============================================",
+    motionStateToString(motion_state_.state).c_str(),
+    motionStateToString(prev_motion_state_.state).c_str(),
+    routeStateToString(route_state_.state).c_str(),
+    localizationStateToString(localization_state_.state).c_str(),
+    adapi_vehicle_status_.turn_indicators.status,
+    has_started_driving_ ? "true" : "false",
+    is_playing_restart_sound_ ? "true" : "false",
+    is_playing_engage_sound_ ? "true" : "false",
+    engage_sound_completed_ ? "true" : "false",
+    go_interface_vehicle_status_.voice_flg ? "true" : "false",
+    go_interface_vehicle_status_.lock_flg ? "true" : "false",
     serviceLayerStateToString(service_layer_state).c_str(),
     controlLayerStateToString(control_layer_state).c_str());
 
