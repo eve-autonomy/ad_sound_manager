@@ -80,10 +80,10 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   // Subscriptions - System
   // ============================================================
 
-  // For: /system/emergency/hazard_status (emergency_holding)
+  // For: /api/external/get/hazard_status (emergency_holding)
   // Note: Use QoS{1} (volatile) to match publisher QoS
-  sub_hazard_status_ = this->create_subscription<autoware_system_msgs::msg::HazardStatusStamped>(
-    "/system/emergency/hazard_status",
+  sub_hazard_status_ = this->create_subscription<tier4_external_api_msgs::msg::HazardStatusStamped>(
+    "/api/external/get/hazard_status",
     rclcpp::QoS{1},
     std::bind(&AdSoundManager::callbackHazardStatus, this, std::placeholders::_1)
   );
@@ -872,7 +872,7 @@ void AdSoundManager::callbackGoInterfaceVehicleStatus(
 // ============================================================
 
 void AdSoundManager::callbackHazardStatus(
-  const autoware_system_msgs::msg::HazardStatusStamped::ConstSharedPtr msg)
+  const tier4_external_api_msgs::msg::HazardStatusStamped::ConstSharedPtr msg)
 {
   bool prev_emergency_holding = emergency_holding_;
   emergency_holding_ = msg->status.emergency_holding;

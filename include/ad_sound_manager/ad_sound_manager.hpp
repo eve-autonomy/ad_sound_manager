@@ -46,9 +46,9 @@
 // For: external system integration (voice_flg, lock_flg)
 #include "go_interface_msgs/msg/vehicle_status.hpp"
 
-// System messages
-// For: /system/emergency/hazard_status (emergency_holding)
-#include "autoware_system_msgs/msg/hazard_status_stamped.hpp"
+// External API messages
+// For: /api/external/get/hazard_status (emergency_holding)
+#include "tier4_external_api_msgs/msg/hazard_status_stamped.hpp"
 
 // Legacy messages (to be removed after migration)
 // For: /awapi/vehicle/get/status (legacy - to be replaced by /api/vehicle/status)
@@ -142,7 +142,7 @@ protected:
   go_interface_msgs::msg::VehicleStatus go_interface_vehicle_status_;
   go_interface_msgs::msg::VehicleStatus prev_go_interface_vehicle_status_;
 
-  // For: /system/emergency/hazard_status (emergency_holding)
+  // For: /api/external/get/hazard_status (emergency_holding)
   bool emergency_holding_ = false;
 
   // Sound playback state for localization initial pose
@@ -198,8 +198,8 @@ private:
   // ============================================================
   // Subscriptions - System
   // ============================================================
-  // For: /system/emergency/hazard_status (emergency_holding)
-  rclcpp::Subscription<autoware_system_msgs::msg::HazardStatusStamped>::SharedPtr sub_hazard_status_;
+  // For: /api/external/get/hazard_status (emergency_holding)
+  rclcpp::Subscription<tier4_external_api_msgs::msg::HazardStatusStamped>::SharedPtr sub_hazard_status_;
 
   // ============================================================
   // Subscriptions - Legacy (TODO: Replace with planning_factors)
@@ -268,9 +268,9 @@ private:
   // ============================================================
   // Callback functions - System
   // ============================================================
-  // For: /system/emergency/hazard_status (emergency_holding)
+  // For: /api/external/get/hazard_status (emergency_holding)
   void callbackHazardStatus(
-    const autoware_system_msgs::msg::HazardStatusStamped::ConstSharedPtr msg);
+    const tier4_external_api_msgs::msg::HazardStatusStamped::ConstSharedPtr msg);
 
   // ============================================================
   // Callback functions - Legacy (TODO: Replace with planning_factors)

@@ -22,7 +22,7 @@
 #include <autoware_adapi_v1_msgs/msg/vehicle_status.hpp>
 #include <autoware_adapi_v1_msgs/msg/turn_indicators.hpp>
 #include <autoware_state_machine_msgs/msg/state_machine.hpp>
-#include <autoware_system_msgs/msg/hazard_status_stamped.hpp>
+#include <tier4_external_api_msgs/msg/hazard_status_stamped.hpp>
 #include <audio_driver_msgs/msg/sound_driver_res.hpp>
 
 using MotionState = autoware_adapi_v1_msgs::msg::MotionState;
@@ -32,7 +32,7 @@ using OperationModeState = autoware_adapi_v1_msgs::msg::OperationModeState;
 using VehicleStatus = autoware_adapi_v1_msgs::msg::VehicleStatus;
 using TurnIndicators = autoware_adapi_v1_msgs::msg::TurnIndicators;
 using StateMachine = autoware_state_machine_msgs::msg::StateMachine;
-using HazardStatusStamped = autoware_system_msgs::msg::HazardStatusStamped;
+using HazardStatusStamped = tier4_external_api_msgs::msg::HazardStatusStamped;
 using SoundDriverRes = audio_driver_msgs::msg::SoundDriverRes;
 
 // ============================================================
@@ -174,7 +174,7 @@ protected:
     sound_res_pub_ = test_node_->create_publisher<SoundDriverRes>(
       "/sound_voice_alarm/audio_res", rclcpp::QoS{3}.transient_local());
     hazard_status_pub_ = test_node_->create_publisher<HazardStatusStamped>(
-      "/system/emergency/hazard_status", rclcpp::QoS{1});
+      "/api/external/get/hazard_status", rclcpp::QoS{1});
 
     // Wait for connections to establish
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
