@@ -16,11 +16,109 @@
 #include <memory>
 #include <utility>
 #include <fstream>
+#include <cmath>
+#include <limits>
+#include <queue>
+#include <cstdint>
 
 #include "ad_sound_manager/ad_sound_manager.hpp"
 
+namespace
+{
+
+using tier4_external_api_msgs::msg::PlanningFactor;
+using tier4_external_api_msgs::msg::PlanningFactorArray;
+
+/** First control point distance (m), or +inf if none. */
+double factorPrimaryDistanceM(const PlanningFactor & factor)
+{
+  if (factor.control_points.empty()) {
+    return std::numeric_limits<double>::infinity();
+  }
+  return static_cast<double>(factor.control_points[0].distance);
+}
+
+/**
+ * 旧 AutowareStateMachine::getNearestStopReasonWithPriority の優先度に相当。
+ * tier4_planning_msgs::StopReason の定数名と planning_factors の behavior_name を対応付け。
+ */
+int8_t planningBehaviorStopPriority(const std::string & behavior_name)
+{
+  if (behavior_name == "surround_obstacle_checker" || behavior_name == "surrounding_obstacle") {
+    return 1;  // SURROUND_OBSTACLE_CHECK
+  }
+  if (behavior_name == "obstacle_stop" || behavior_name == "route_obstacle") {
+    return 2;  // OBSTACLE_STOP
+  }
+  if (behavior_name == "user_defined_detection_area") {
+    return 3;  // DETECTION_AREA
+  }
+  if (behavior_name == "virtual_traffic_light") {
+    return 4;  // VIRTUAL_TRAFFIC_LIGHT
+  }
+  if (behavior_name == "stop_sign") {
+    return 5;  // STOP_LINE 相当
+  }
+  return 10;
+}
+
+struct FactorStopInfo
+{
+  std::string behavior_name;
+  double distance;
+  int8_t priority;
+};
+
+/**
+ * 全 factors を走査し、旧 getNearestStopReasonWithPriority と同様の比較で最も手前／優先度の高い要因を1つ選ぶ。
+ * dist_select_max_m より遠い（>=）要因は除外（旧 dist_to_stop_pose < max と同趣旨）。
+ */
+std::pair<std::string, double> selectNearestPlanningFactorBehaviorWithPriority(
+  const PlanningFactorArray & msg, double dist_select_max_m)
+{
+  static constexpr double kNearDist = 1e-3;
+  auto compare = [](const FactorStopInfo & a, const FactorStopInfo & b) -> bool {
+    if (a.distance < kNearDist && b.distance < kNearDist) {
+      return a.priority > b.priority;
+    }
+    return a.distance > b.distance;
+  };
+  std::priority_queue<FactorStopInfo, std::vector<FactorStopInfo>, decltype(compare)> que(compare);
+
+  for (const auto & factor : msg.factors) {
+    if (factor.behavior_name.empty()) {
+      continue;
+    }
+    const double d = factorPrimaryDistanceM(factor);
+    if (!std::isfinite(d) || d >= dist_select_max_m) {
+      continue;
+    }
+    que.push(FactorStopInfo{factor.behavior_name, d, planningBehaviorStopPriority(factor.behavior_name)});
+  }
+
+  if (que.empty()) {
+    return {"", 0.0};
+  }
+  const FactorStopInfo top = que.top();
+  return {top.behavior_name, top.distance};
+}
+
+/** API の behavior_name: 仕様名と planning モジュール実名の両方を障害物接近として扱う。 */
+bool isObstacleApproachBehaviorName(const std::string & bname)
+{
+  return bname == "route_obstacle" || bname == "user_defined_detection_area" ||
+         bname == "obstacle_stop";
+}
+
+}  // namespace
+
 namespace ad_sound_manager
 {
+
+bool AdSoundManager::isPlanningSelectedDistAheadOfStopThreshold(double dist_m) const
+{
+  return std::isfinite(dist_m) && dist_m > stop_approach_dist_threshold_m_;
+}
 
 AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
 : Node("ad_sound_manager", options)
@@ -89,14 +187,13 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   );
 
   // ============================================================
-  // Subscriptions - Legacy (TODO: Replace with planning_factors)
+  // Subscriptions - /api/external/get/planning_factors (AW API)
   // ============================================================
 
-  // TODO: Replace with /api/external/get/planning_factors
-  sub_awapi_autoware_status_ = this->create_subscription<tier4_api_msgs::msg::AwapiAutowareStatus>(
-    "/awapi/autoware/get/status",
-    rclcpp::QoS{1}.transient_local(),
-    std::bind(&AdSoundManager::callbackAwapiAutowareStatus, this, std::placeholders::_1)
+  sub_planning_factors_ = this->create_subscription<PlanningFactorArray>(
+    "/api/external/get/planning_factors",
+    rclcpp::QoS{1},
+    std::bind(&AdSoundManager::callbackPlanningFactors, this, std::placeholders::_1)
   );
 
   // ============================================================
@@ -140,6 +237,9 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   sound_filename_call_ = this->declare_parameter<std::string>("sound_filename_call", "");
   sound_filename_alert_imu_initialize_ = this->declare_parameter<std::string>("sound_filename_alert_imu_initialize", "");
   sound_directory_path_ = this->declare_parameter<std::string>("sound_directory_path", "");
+  stop_approach_dist_threshold_m_ = this->declare_parameter<double>("stop_approach_dist_threshold_m", 1.0);
+  planning_factors_selection_dist_max_m_ =
+    this->declare_parameter<double>("planning_factors_selection_dist_max_m", 500.0);
 
   // Check for the audio file names.
   if ((sound_filename_avoid_ == "") ||
@@ -296,7 +396,8 @@ void AdSoundManager::callbackVoiceRes(
     RCLCPP_INFO(this->get_logger(),
       "[DEBUG] Engage sound completed, transitioning to STATE_INSTRUCT_ENGAGE");
     is_playing_engage_sound_ = false;  // Clear flag
-    engage_sound_completed_ = true;    // Set flag for stateless STATE_INSTRUCT_ENGAGE
+    post_engage_sound_latched_ = true;
+    has_started_driving_ = true;       // 走行セッション: 発進案内音声完了後のみ true
     publishSoundDone();
     // 発進音声完了後、現在の ADAPI 状態に基づいて次の状態を決定（ステートレス）
     updateAutowareStateFromTopics();
@@ -309,6 +410,7 @@ void AdSoundManager::callbackVoiceRes(
     RCLCPP_INFO(this->get_logger(),
       "[DEBUG] Restart sound completed, calling publishSoundDone() and updateAutowareStateFromTopics()");
     is_playing_restart_sound_ = false;  // Clear flag
+    has_started_driving_ = true;       // 走行セッション: 再発進案内音声完了後も true
     publishSoundDone();
     // 再発進音声完了後、現在の ADAPI 状態に基づいて次の状態に遷移
     updateAutowareStateFromTopics();
@@ -726,6 +828,7 @@ void AdSoundManager::callbackMotionState(
   const autoware_adapi_v1_msgs::msg::MotionState::ConstSharedPtr msg)
 {
   using MotionState = autoware_adapi_v1_msgs::msg::MotionState;
+  using LocalizationState = autoware_adapi_v1_msgs::msg::LocalizationInitializationState;
 
   prev_motion_state_ = motion_state_;
   motion_state_ = *msg;
@@ -742,11 +845,29 @@ void AdSoundManager::callbackMotionState(
     is_playing_restart_sound_ = true;
   }
 
-  // Track if driving has started (motion=MOVING occurred)
-  // Also clear engage_sound_completed_ flag when motion becomes MOVING
-  if (motion_state_.state == MotionState::MOVING) {
-    has_started_driving_ = true;
-    engage_sound_completed_ = false;  // Clear flag after driving starts
+  // has_started_driving_ / driving_session_had_moving_ は motion ではいじらない。
+
+  // 制御は最初から ON で control_rising が無い PSim 等: ルート未 SET の短い MOVING のあと停止したら pending
+  // （route SET 中の MOVING→STOPPED は別経路・テスト間の transient_local 残りと区別するためここでは立てない）
+  {
+    using RouteState = autoware_adapi_v1_msgs::msg::RouteState;
+    using OperationModeState = autoware_adapi_v1_msgs::msg::OperationModeState;
+    if (prev_motion_state_.state == MotionState::MOVING &&
+        motion_state_.state == MotionState::STOPPED &&
+        route_state_.state != RouteState::SET &&
+        operation_mode_state_.is_autoware_control_enabled &&
+        operation_mode_state_.mode == OperationModeState::AUTONOMOUS &&
+        localization_state_.state == LocalizationState::INITIALIZED &&
+        !emergency_holding_ &&
+        !has_started_driving_ &&
+        !is_playing_engage_sound_)
+    {
+      pending_autonomous_control_inform_engage_ = true;
+      RCLCPP_INFO(
+        this->get_logger(),
+        "[DEBUG] MOVING->STOPPED while route not SET (AUTONOMOUS + Autoware control): "
+        "pending STATE_INFORM_ENGAGE after route SET (e.g. obstacle creep then mission)");
+    }
   }
 
   if (prev_motion_state_.state != motion_state_.state) {
@@ -804,10 +925,13 @@ void AdSoundManager::callbackRouteState(
   prev_route_state_ = route_state_;
   route_state_ = *msg;
 
-  // Reset driving flags when route becomes UNSET or UNKNOWN (new trip)
+  // 新規トリップ: 発進系フラグをリセット（has_started は update 先頭の同期でも落とす）
   if (route_state_.state == RouteState::UNSET || route_state_.state == RouteState::UNKNOWN) {
-    has_started_driving_ = false;
-    engage_sound_completed_ = false;
+    post_engage_sound_latched_ = false;
+    pending_autonomous_control_inform_engage_ = false;
+    planning_selected_stop_reason_initialized_ = false;
+    cached_planning_selected_nearest_ = {"", 0.0};
+    driving_session_had_moving_ = false;
   }
 
   if (prev_route_state_.state != route_state_.state) {
@@ -838,6 +962,10 @@ void AdSoundManager::callbackLocalizationState(
 void AdSoundManager::callbackOperationModeState(
   const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg)
 {
+  using autoware_adapi_v1_msgs::msg::OperationModeState;
+  using autoware_adapi_v1_msgs::msg::RouteState;
+  using autoware_adapi_v1_msgs::msg::MotionState;
+
   prev_operation_mode_state_ = operation_mode_state_;
   operation_mode_state_ = *msg;
 
@@ -845,6 +973,28 @@ void AdSoundManager::callbackOperationModeState(
   if (prev_operation_mode_state_.mode != operation_mode_state_.mode ||
       prev_operation_mode_state_.is_autoware_control_enabled != operation_mode_state_.is_autoware_control_enabled)
   {
+    // 障害物前などで STARTING が付かず停止のまま制御が入ると INSTRUCT に直行し INFORM 音声が出ない。
+    // 停止中の立ち上がりは pending で INFORM を挟む。
+    const bool control_rising =
+      !prev_operation_mode_state_.is_autoware_control_enabled &&
+      operation_mode_state_.is_autoware_control_enabled;
+    const bool mode_became_autonomous =
+      prev_operation_mode_state_.mode != OperationModeState::AUTONOMOUS &&
+      operation_mode_state_.mode == OperationModeState::AUTONOMOUS;
+    if ((control_rising || mode_became_autonomous) &&
+        operation_mode_state_.is_autoware_control_enabled &&
+        operation_mode_state_.mode == OperationModeState::AUTONOMOUS &&
+        route_state_.state == RouteState::SET &&
+        motion_state_.state == MotionState::STOPPED &&
+        !has_started_driving_)
+    {
+      pending_autonomous_control_inform_engage_ = true;
+      RCLCPP_INFO(
+        this->get_logger(),
+        "[DEBUG] Autoware AUTONOMOUS+control while STOPPED (route SET): "
+        "pending STATE_INFORM_ENGAGE (control edge or mode->AUTONOMOUS; e.g. PSim, obstacle ahead)");
+    }
+
     updateAutowareStateFromTopics();
   }
 }
@@ -887,15 +1037,29 @@ void AdSoundManager::callbackHazardStatus(
 }
 
 // ============================================================
-// Callback functions - Legacy (TODO: Replace with planning_factors)
+// Callback functions - /api/external/get/planning_factors
 // ============================================================
 
-void AdSoundManager::callbackAwapiAutowareStatus(
-  const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg)
+void AdSoundManager::callbackPlanningFactors(
+  const tier4_external_api_msgs::msg::PlanningFactorArray::ConstSharedPtr msg)
 {
-  awapi_autoware_status_ = *msg;
+  const std::pair<std::string, double> nearest = selectNearestPlanningFactorBehaviorWithPriority(
+    *msg, planning_factors_selection_dist_max_m_);
+  const bool dist_ahead_curr = isPlanningSelectedDistAheadOfStopThreshold(nearest.second);
+  const bool dist_ahead_cached =
+    isPlanningSelectedDistAheadOfStopThreshold(cached_planning_selected_nearest_.second);
 
-  // TODO: Replace with /api/external/get/planning_factors for stop reason detection
+  // behavior も閾値前後も変わらなければ update 不要（cached の距離は更新しない）
+  if (planning_selected_stop_reason_initialized_ &&
+      nearest.first == cached_planning_selected_nearest_.first &&
+      dist_ahead_curr == dist_ahead_cached)
+  {
+    return;
+  }
+
+  cached_planning_selected_nearest_ = nearest;
+  planning_selected_stop_reason_initialized_ = true;
+  updateAutowareStateFromTopics();
 }
 
 // ============================================================
@@ -912,16 +1076,35 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
   using MotionState = autoware_adapi_v1_msgs::msg::MotionState;
   using RouteState = autoware_adapi_v1_msgs::msg::RouteState;
   using LocalizationState = autoware_adapi_v1_msgs::msg::LocalizationInitializationState;
+  using OperationModeState = autoware_adapi_v1_msgs::msg::OperationModeState;
   using TurnIndicators = autoware_adapi_v1_msgs::msg::TurnIndicators;
+
+  const bool had_started_driving_before = has_started_driving_;
+
+  // 走行セッションフラグ: 案内音声で true にしたあとも、ルート・定位・非常停止で false
+  if (emergency_holding_ ||
+      route_state_.state != RouteState::SET ||
+      localization_state_.state != LocalizationState::INITIALIZED)
+  {
+    has_started_driving_ = false;
+    driving_session_had_moving_ = false;
+  }
+  // pending は route 未 SET の間も保持する（UNSET 中に MOVING→STOPPED してから SET する PSim 向け）。
+  // クリアは route UNSET/UNKNOWN の callback と、定位未済・非常停止のみ。
+  if (emergency_holding_ ||
+      localization_state_.state != LocalizationState::INITIALIZED)
+  {
+    pending_autonomous_control_inform_engage_ = false;
+  }
 
   // Debug: log input states
   RCLCPP_INFO(this->get_logger(),
     "[DEBUG] updateAutowareStateFromTopics: localization=%u, route=%u, motion=%u, control_enabled=%d, "
-    "wakeup=%d, engage=%d, restart=%d, arrival=%d, has_started=%d",
+    "wakeup=%d, engage=%d, restart=%d, arrival=%d, has_started=%d session_had_moving=%d",
     localization_state_.state, route_state_.state, motion_state_.state,
     operation_mode_state_.is_autoware_control_enabled,
     is_playing_wakeup_sound_, is_playing_engage_sound_, is_playing_restart_sound_,
-    is_playing_arrival_sound_, has_started_driving_);
+    is_playing_arrival_sound_, has_started_driving_, driving_session_had_moving_ ? 1 : 0);
 
   // ============================================================
   // Derive control_layer_state
@@ -936,6 +1119,15 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
   // Based on design document Section 5.5
   // ============================================================
   uint16_t service_layer_state = StateMachine::STATE_UNDEFINED;
+
+  // 全 factors を旧 getNearestStopReasonWithPriority 相当で集約（callback でキャッシュ済み）
+  const std::string & planning_sel_name = cached_planning_selected_nearest_.first;
+  const double planning_sel_dist = cached_planning_selected_nearest_.second;
+  const bool planning_sel_dist_ahead = isPlanningSelectedDistAheadOfStopThreshold(planning_sel_dist);
+  const bool planning_p14_stop_factor =
+    isObstacleApproachBehaviorName(planning_sel_name) ||
+    ((planning_sel_name == "surround_obstacle_checker" || planning_sel_name == "surrounding_obstacle") &&
+     post_engage_sound_latched_);
 
   // Priority 1: Wakeup sound playing (highest priority)
   if (is_playing_wakeup_sound_) {
@@ -967,6 +1159,8 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
     service_layer_state = StateMachine::STATE_ARRIVED_GOAL;
   }
   // Priority 8: Route not set, unknown, or changing
+  // MOVING の例外は付けない。route UNKNOWN + localization 済 + MOVING で P13 に落ちると
+  // ルート設定・発進前に STATE_RUNNING（走行系 BGM）になってしまう（psim.log 参照）。
   else if (route_state_.state == RouteState::UNSET ||
            route_state_.state == RouteState::UNKNOWN ||
            route_state_.state == RouteState::CHANGING)
@@ -982,35 +1176,92 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
   {
     service_layer_state = StateMachine::STATE_WAITING_CALL_PERMISSION;
   }
-  // Priority 10: Waiting for engage instruction
+  // Priority 9b: 制御立ち上がりで STOPPED のまま（障害物前で STARTING が出ない）→ 発進案内音声を挟む
+  // P10 より前に置く（has_started がまだ false のため P10 と両立する）
+  // engage 相当（AUTONOMOUS かつ Autoware 制御 ON）のときだけ INFORM を選び、pending は満たすまで保持する
+  else if (pending_autonomous_control_inform_engage_ &&
+           route_state_.state == RouteState::SET &&
+           motion_state_.state == MotionState::STOPPED &&
+           operation_mode_state_.is_autoware_control_enabled &&
+           operation_mode_state_.mode == OperationModeState::AUTONOMOUS &&
+           !has_started_driving_ &&
+           !is_playing_engage_sound_)
+  {
+    service_layer_state = StateMachine::STATE_INFORM_ENGAGE;
+    pending_autonomous_control_inform_engage_ = false;
+  }
+  // Priority 10: Waiting for engage instruction（発進音声が未完了のときのみ。完了後は P11 / P14 へ）
   else if (route_state_.state == RouteState::SET &&
            motion_state_.state == MotionState::STOPPED &&
            !has_started_driving_)
   {
     service_layer_state = StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION;
   }
-  // Priority 11: INSTRUCT_ENGAGE (after engage sound completed, waiting for MOVING)
-  // Stateless: Uses engage_sound_completed_ flag - must check BEFORE INFORM_ENGAGE
-  else if (engage_sound_completed_ &&
+  // Priority 10b: 走行セッション中の停止（一度 MOVING したあと、または planning が障害物／周辺近接）
+  // P11 より前（発進直後に障害で止まると has_started のみ true のため）
+  else if (motion_state_.state == MotionState::STOPPED &&
+           has_started_driving_ &&
            route_state_.state == RouteState::SET &&
-           motion_state_.state != MotionState::MOVING &&
-           !has_started_driving_) {
+           (driving_session_had_moving_ || planning_p14_stop_factor))
+  {
+    const std::string & bname = planning_sel_name;
+    if ((bname == "surround_obstacle_checker" || bname == "surrounding_obstacle") &&
+      post_engage_sound_latched_)
+    {
+      service_layer_state = StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY;
+    } else if (isObstacleApproachBehaviorName(bname)) {
+      service_layer_state = StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE;
+    } else {
+      // "virtual_traffic_light", その他、要因なし
+      service_layer_state = StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION;
+    }
+  }
+  // Priority 11: INSTRUCT_ENGAGE（発進音声済み・初回 MOVING 前・障害 planning なしで停止中）
+  else if (has_started_driving_ &&
+           route_state_.state == RouteState::SET &&
+           motion_state_.state == MotionState::STOPPED &&
+           !driving_session_had_moving_) {
     service_layer_state = StateMachine::STATE_INSTRUCT_ENGAGE;
   }
-  // Priority 12: Starting - initial engage (motion=STARTING, not yet driving, engage not completed)
-  else if (motion_state_.state == MotionState::STARTING && !has_started_driving_ && !engage_sound_completed_) {
+  // Priority 12: Starting - initial engage (motion=STARTING, not yet driving session)
+  else if (motion_state_.state == MotionState::STARTING && !has_started_driving_) {
     service_layer_state = StateMachine::STATE_INFORM_ENGAGE;
   }
   // Priority 12b: Starting - restart after stop (motion=STARTING, already driving)
   else if (motion_state_.state == MotionState::STARTING && has_started_driving_) {
     service_layer_state = StateMachine::STATE_INFORM_RESTART;
   }
-  // Priority 13: Moving (route must be SET)
-  else if (motion_state_.state == MotionState::MOVING && route_state_.state == RouteState::SET) {
-    // Update has_started_driving flag
-    has_started_driving_ = true;
+  // Priority 12c: ルート SET 時に既に MOVING（UNSET 中に MOVING が先に立つ PSim 等）で発進前のときは
+  // RUNNING にせず発進案内へ（has_started は route 非 SET の MOVING では立てない）
+  else if (motion_state_.state == MotionState::MOVING &&
+           route_state_.state == RouteState::SET &&
+           localization_state_.state == LocalizationState::INITIALIZED &&
+           operation_mode_state_.is_autoware_control_enabled &&
+           !has_started_driving_ &&
+           !is_playing_engage_sound_)
+  {
+    service_layer_state = StateMachine::STATE_INFORM_ENGAGE;
+  }
+  // Priority 13: Moving under Autoware control（route は SET のみ。未 SET は P8）
+  // planning に応じて接近・周辺を表現し、該当なければ RUNNING / ウインカー
+  else if (motion_state_.state == MotionState::MOVING &&
+           localization_state_.state == LocalizationState::INITIALIZED &&
+           operation_mode_state_.is_autoware_control_enabled &&
+           route_state_.state == RouteState::SET)
+  {
+    driving_session_had_moving_ = true;
 
-    if (adapi_vehicle_status_.turn_indicators.status == TurnIndicators::LEFT) {
+    const std::string & bname = planning_sel_name;
+
+    if ((bname == "surround_obstacle_checker" || bname == "surrounding_obstacle") &&
+      post_engage_sound_latched_)
+    {
+      service_layer_state = StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY;
+    } else if (planning_sel_dist_ahead && isObstacleApproachBehaviorName(bname)) {
+      service_layer_state = StateMachine::STATE_RUNNING_TOWARD_OBSTACLE;
+    } else if (planning_sel_dist_ahead && bname == "virtual_traffic_light") {
+      service_layer_state = StateMachine::STATE_RUNNING_TOWARD_STOP_LINE;
+    } else if (adapi_vehicle_status_.turn_indicators.status == TurnIndicators::LEFT) {
       service_layer_state = StateMachine::STATE_TURNING_LEFT;
     } else if (adapi_vehicle_status_.turn_indicators.status == TurnIndicators::RIGHT) {
       service_layer_state = StateMachine::STATE_TURNING_RIGHT;
@@ -1018,14 +1269,30 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
       service_layer_state = StateMachine::STATE_RUNNING;
     }
   }
-  // Priority 14: Stopped after driving started (traffic stop)
-  else if (motion_state_.state == MotionState::STOPPED && has_started_driving_) {
-    // TODO: Replace with /api/external/get/planning_factors for stop reason detection
-    service_layer_state = StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION;
-  }
   // Priority 15: Default
   else {
     service_layer_state = StateMachine::STATE_UNDEFINED;
+  }
+
+  // surround_obstacle_checker 診断（planning_factors は高頻度のため throttle）
+  {
+    const std::string & sb = planning_sel_name;
+    if (sb == "surround_obstacle_checker" || sb == "surrounding_obstacle") {
+      const double d0 = planning_sel_dist;
+      const int is_surround_service =
+        (service_layer_state == StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY) ? 1 : 0;
+      RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "[surround_obstacle_checker_diag] motion=%u route=%u session_had_moving=%d "
+        "post_engage_sound_latched=%d had_started_before=%d has_started_after=%d dist0=%.3f "
+        "stop_approach_th=%.2f derived_service=%s (SURROUNDING_PROXIMITY_service=%d; "
+        "周辺近接へは post_engage_sound_latched=1 のときのみ)",
+        motion_state_.state, route_state_.state, driving_session_had_moving_ ? 1 : 0,
+        post_engage_sound_latched_ ? 1 : 0,
+        had_started_driving_before ? 1 : 0, has_started_driving_ ? 1 : 0,
+        d0, stop_approach_dist_threshold_m_,
+        serviceLayerStateToString(service_layer_state).c_str(), is_surround_service);
+    }
   }
 
   // 詳細デバッグログ：全トピック情報を時系列で出力
@@ -1038,7 +1305,7 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
     "  has_started_driving: %s\n"
     "  is_playing_restart_sound: %s\n"
     "  is_playing_engage_sound: %s\n"
-    "  engage_sound_completed: %s\n"
+    "  driving_session_had_moving: %s\n"
     "  voice_flg: %s, lock_flg: %s\n"
     "  --> derived_service: %s\n"
     "  --> derived_control: %s\n"
@@ -1051,7 +1318,7 @@ void AdSoundManager::updateAutowareStateFromTopics(void)
     has_started_driving_ ? "true" : "false",
     is_playing_restart_sound_ ? "true" : "false",
     is_playing_engage_sound_ ? "true" : "false",
-    engage_sound_completed_ ? "true" : "false",
+    driving_session_had_moving_ ? "true" : "false",
     go_interface_vehicle_status_.voice_flg ? "true" : "false",
     go_interface_vehicle_status_.lock_flg ? "true" : "false",
     serviceLayerStateToString(service_layer_state).c_str(),
