@@ -61,7 +61,7 @@ public:
 
   // === Internal flags ===
   bool hasStartedDriving() const { return has_started_driving_; }
-  bool isEngageSoundCompleted() const { return engage_sound_completed_; }
+  bool drivingSessionHadMoving() const { return driving_session_had_moving_; }
 
   // === Topic states ===
   uint16_t getMotionState() const { return motion_state_.state; }
@@ -179,6 +179,12 @@ protected:
     // Wait for connections to establish
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
+    // P13 / Priority 12c は制御有効を前提とする。未設定だと is_autoware_control_enabled が常に false になり RUNNING に届かない。
+    publishOperationMode(true);
+
+    // transient_local の motion が前テストの MOVING のまま残ると MOVING→STOPPED pending が誤発火するため正規化
+    publishMotion(MotionState::STOPPED);
+
     // Initial spin to process any pending callbacks
     spinOnce(5);
   }
@@ -223,9 +229,12 @@ protected:
     spinOnce(3);
   }
 
-  void publishOperationMode(bool is_autoware_control_enabled)
+  void publishOperationMode(
+    bool is_autoware_control_enabled,
+    uint8_t mode = OperationModeState::AUTONOMOUS)
   {
     auto msg = OperationModeState();
+    msg.mode = mode;
     msg.is_autoware_control_enabled = is_autoware_control_enabled;
     operation_mode_pub_->publish(msg);
     spinOnce(3);
@@ -322,6 +331,96 @@ TEST_F(StateTransitionTest, AfterRouteSet_TransitionToWaitingEngageInstruction)
   EXPECT_FALSE(node_->hasStartedDriving());
 }
 
+// Test: Route SET while already MOVING (UNSET 中に先に MOVING) では RUNNING にせず発進案内へ
+TEST_F(StateTransitionTest, RouteSetWhileAlreadyMoving_ShouldInformEngageThenRunning)
+{
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::UNSET);
+  publishMotion(MotionState::STOPPED);
+  publishMotion(MotionState::MOVING);
+  EXPECT_FALSE(node_->hasStartedDriving());
+
+  publishRoute(RouteState::SET);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  EXPECT_FALSE(node_->hasStartedDriving());
+
+  publishSoundResponse();
+  // 既に MOVING のため INSTRUCT は挟まず P13 で RUNNING へ
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+  EXPECT_TRUE(node_->hasStartedDriving());
+}
+
+// Test: 障害物前などで motion=STARTING が付かず STOPPED のまま Autoware 制御が入っても INFORM_ENGAGE へ
+TEST_F(StateTransitionTest, ObstacleAheadEngageWithoutStarting_GoesToInformEngage)
+{
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::UNSET);
+  publishRoute(RouteState::SET);
+  publishMotion(MotionState::STOPPED);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION);
+
+  // SetUp で一度制御 ON になっているため、立ち上がりを再現するために OFF→ON
+  publishOperationMode(false, OperationModeState::AUTONOMOUS);
+  spinOnce(3);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION);
+
+  // engage: 停止のまま制御 ON（STARTING なし）
+  publishOperationMode(true, OperationModeState::AUTONOMOUS);
+  spinOnce(8);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  EXPECT_TRUE(node_->isPlayingEngageSound());
+}
+
+// UNSET 中の MOVING→STOPPED で pending を立て、route SET 後に P9b で INFORM（制御立ち上がりなしの PSim 相当）
+TEST_F(StateTransitionTest, MovingStoppedWhileRouteUnset_ThenSet_GoesToInformEngage)
+{
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::UNSET);
+  publishMotion(MotionState::STOPPED);
+  publishMotion(MotionState::MOVING);
+  publishMotion(MotionState::STOPPED);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_RECEIVE_ROUTE);
+
+  publishRoute(RouteState::SET);
+  spinOnce(8);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  EXPECT_TRUE(node_->isPlayingEngageSound());
+}
+
+// pending があっても LOCAL の間は INFORM にせず、AUTONOMOUS になってから P9b で INFORM（未 engage 相当の抑止）
+TEST_F(StateTransitionTest, PendingWithRouteSetWhileLocal_StaysWaitingUntilAutonomous)
+{
+  spinOnce(5);
+  publishSoundResponse();
+  publishLocalization(LocalizationState::INITIALIZED);
+  publishRoute(RouteState::UNSET);
+  publishMotion(MotionState::STOPPED);
+  publishMotion(MotionState::MOVING);
+  publishMotion(MotionState::STOPPED);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_RECEIVE_ROUTE);
+
+  publishOperationMode(true, OperationModeState::LOCAL);
+  spinOnce(3);
+
+  publishRoute(RouteState::SET);
+  spinOnce(8);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION);
+
+  publishOperationMode(true, OperationModeState::AUTONOMOUS);
+  spinOnce(8);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  EXPECT_TRUE(node_->isPlayingEngageSound());
+}
+
 // Test: After motion=STARTING, transition to STATE_INFORM_ENGAGE
 TEST_F(StateTransitionTest, AfterEngageStarted_TransitionToInformEngage)
 {
@@ -350,13 +449,13 @@ TEST_F(StateTransitionTest, AfterEngageSoundCompleted_TransitionToInstructEngage
   publishMotion(MotionState::STOPPED);
   publishMotion(MotionState::STARTING);
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
-  EXPECT_FALSE(node_->isEngageSoundCompleted());
+  EXPECT_FALSE(node_->hasStartedDriving());
 
   // Engage sound completed
   publishSoundResponse();
 
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INSTRUCT_ENGAGE);
-  EXPECT_TRUE(node_->isEngageSoundCompleted());  // Flag should be set
+  EXPECT_TRUE(node_->hasStartedDriving());
 }
 
 // Test: After motion=MOVING, transition to STATE_RUNNING
@@ -371,14 +470,15 @@ TEST_F(StateTransitionTest, AfterMoving_TransitionToRunning)
   publishMotion(MotionState::STARTING);
   publishSoundResponse();  // Engage sound completed
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INSTRUCT_ENGAGE);
-  EXPECT_TRUE(node_->isEngageSoundCompleted());  // Verify flag is set
+  EXPECT_TRUE(node_->hasStartedDriving());
+  EXPECT_FALSE(node_->drivingSessionHadMoving());
 
   // Moving
   publishMotion(MotionState::MOVING);
 
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
   EXPECT_TRUE(node_->hasStartedDriving());
-  EXPECT_FALSE(node_->isEngageSoundCompleted());  // Flag should be cleared on MOVING
+  EXPECT_TRUE(node_->drivingSessionHadMoving());
 }
 
 // Test: After route=ARRIVED, transition to STATE_ARRIVED_GOAL

@@ -55,9 +55,8 @@
 #include "tier4_api_msgs/msg/awapi_vehicle_status.hpp"
 // For: turn signal constants (legacy - to be replaced by TurnIndicators)
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
-// TODO: Replace with /api/external/get/planning_factors for stop reason detection
-// For: /awapi/autoware/get/status (stop_reason)
-#include "tier4_api_msgs/msg/awapi_autoware_status.hpp"
+// For: /api/external/get/planning_factors (stop reason / approach distance)
+#include "tier4_external_api_msgs/msg/planning_factor_array.hpp"
 
 // Other messages
 // For: /localization/initial_pose/sound/response
@@ -105,13 +104,21 @@ protected:
   bool is_playing_restart_sound_ = false;
   bool is_playing_arrival_sound_ = false;
 
-  // Flag to track if engage sound has completed (for stateless STATE_INSTRUCT_ENGAGE)
-  // Set when engage sound completes, cleared when motion becomes MOVING
-  bool engage_sound_completed_ = false;
+  // True after 発進音声 completes for this route; kept true during走行 (cleared on route UNSET/UNKNOWN).
+  // planning_factors の surround_obstacle_checker による周辺近接停止へ遷移する条件に使用。
+  bool post_engage_sound_latched_ = false;
 
-  // Flag to track if driving has started (motion=MOVING occurred)
-  // Reset when route becomes UNSET
+  // 走行セッション（発進・再発進の案内音声完了後〜ルート・定位・非常停止でリセットまで）
+  // true: STATE_INFORM_ENGAGE / STATE_INFORM_RESTART のワンショット音声完了時のみ立てる
+  // false: 起動時、route!=SET、localization!=INITIALIZED、emergency_holding
   bool has_started_driving_ = false;
+
+  /** 当セッションで一度でも MOVING になった（P11 INSTRUCT と P14 停止系の切り分け） */
+  bool driving_session_had_moving_ = false;
+
+  // Autoware 制御の立ち上がりで motion=STARTING が付かない（障害物前の engage 等）とき、
+  // 一度だけ STATE_INFORM_ENGAGE を選ぶ
+  bool pending_autonomous_control_inform_engage_ = false;
 
   // For: /api/motion/state
   // Values: UNKNOWN(0), STOPPED(1), STARTING(2), MOVING(3)
@@ -202,10 +209,9 @@ private:
   rclcpp::Subscription<tier4_external_api_msgs::msg::HazardStatusStamped>::SharedPtr sub_hazard_status_;
 
   // ============================================================
-  // Subscriptions - Legacy (TODO: Replace with planning_factors)
+  // Subscriptions - Planning factors (AW API)
   // ============================================================
-  // TODO: Replace with /api/external/get/planning_factors
-  rclcpp::Subscription<tier4_api_msgs::msg::AwapiAutowareStatus>::SharedPtr sub_awapi_autoware_status_;
+  rclcpp::Subscription<tier4_external_api_msgs::msg::PlanningFactorArray>::SharedPtr sub_planning_factors_;
 
   // ============================================================
   // Subscriptions - Other
@@ -229,13 +235,16 @@ private:
   //   - other                            : false
   bool continuity_state_;
 
-  // ============================================================
-  // Legacy state variables (TODO: Replace with planning_factors)
-  // ============================================================
+  // /api/external/get/planning_factors はコールバック内で集約のみ（全文は保持しない）
+  double stop_approach_dist_threshold_m_ = 1.0;
+  /** 全 factor を走査するとき、これより遠い control_points[0].distance は候補から除外（旧 dist_to_stop_pose_max_th 相当）。 */
+  double planning_factors_selection_dist_max_m_ = 500.0;
+  /** 集約停止要因を一度は受け取ったか（ルート UNSET 等で false に戻す） */
+  bool planning_selected_stop_reason_initialized_ = false;
+  /** selectNearest の集約結果。早期 return 時は直前に確定した値のまま（距離は閾値跨ぎまで省略可） */
+  std::pair<std::string, double> cached_planning_selected_nearest_{"", 0.0};
 
-  // For: /awapi/autoware/get/status (stop_reason)
-  // TODO: Replace with /api/external/get/planning_factors
-  tier4_api_msgs::msg::AwapiAutowareStatus awapi_autoware_status_;
+  bool isPlanningSelectedDistAheadOfStopThreshold(double dist_m) const;
 
   void makeFullPathWithFileCheck(std::string & file_path);
 
@@ -273,11 +282,10 @@ private:
     const tier4_external_api_msgs::msg::HazardStatusStamped::ConstSharedPtr msg);
 
   // ============================================================
-  // Callback functions - Legacy (TODO: Replace with planning_factors)
+  // Callback functions - Planning factors (AW API)
   // ============================================================
-  // TODO: Replace with /api/external/get/planning_factors
-  void callbackAwapiAutowareStatus(
-    const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg);
+  void callbackPlanningFactors(
+    const tier4_external_api_msgs::msg::PlanningFactorArray::ConstSharedPtr msg);
 
   // ============================================================
   // Callback functions - Other
