@@ -237,7 +237,10 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   sound_filename_call_ = this->declare_parameter<std::string>("sound_filename_call", "");
   sound_filename_alert_imu_initialize_ = this->declare_parameter<std::string>("sound_filename_alert_imu_initialize", "");
   sound_directory_path_ = this->declare_parameter<std::string>("sound_directory_path", "");
-  stop_approach_dist_threshold_m_ = this->declare_parameter<double>("stop_approach_dist_threshold_m", 1.0);
+  double stop_dist_to_prohibit_engage = this->declare_parameter<double>(
+    "stop_dist_to_prohibit_engage", 0.30);
+  // Add a value of 0.05 to `stop_dist_to_prohibit_engage`.
+  stop_approach_dist_threshold_m_ = stop_dist_to_prohibit_engage + 0.05;
   planning_factors_selection_dist_max_m_ =
     this->declare_parameter<double>("planning_factors_selection_dist_max_m", 500.0);
 
