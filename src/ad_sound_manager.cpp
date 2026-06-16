@@ -64,8 +64,8 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
 
   sound_filename_avoid_ = this->declare_parameter<std::string>("sound_filename_avoid", "");
   sound_filename_start_ = this->declare_parameter<std::string>("sound_filename_start", "");
-  sound_filename_left_ = this->declare_parameter<std::string>("sound_filename_left", "");
-  sound_filename_right_ = this->declare_parameter<std::string>("sound_filename_right", "");
+  sound_filename_turn_left_ = this->declare_parameter<std::string>("sound_filename_turn_left", "");
+  sound_filename_turn_right_ = this->declare_parameter<std::string>("sound_filename_turn_right", "");
   sound_filename_bgm_ = this->declare_parameter<std::string>("sound_filename_bgm", "");
   sound_filename_obstacle_ = this->declare_parameter<std::string>("sound_filename_obstacle", "");
   sound_filename_wakeup_ = this->declare_parameter<std::string>("sound_filename_wakeup", "");
@@ -78,8 +78,8 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   // Check for the audio file names.
   if ((sound_filename_avoid_ == "") ||
     (sound_filename_start_ == "") ||
-    (sound_filename_left_ == "") ||
-    (sound_filename_right_ == "") ||
+    (sound_filename_turn_left_ == "") ||
+    (sound_filename_turn_right_ == "") ||
     (sound_filename_bgm_ == "") ||
     (sound_filename_obstacle_ == ""))
   {
@@ -110,8 +110,8 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
 
   sound_filename_avoid_ = sound_directory_path + sound_filename_avoid_;
   sound_filename_start_ = sound_directory_path + sound_filename_start_;
-  sound_filename_left_ = sound_directory_path + sound_filename_left_;
-  sound_filename_right_ = sound_directory_path + sound_filename_right_;
+  sound_filename_turn_left_ = sound_directory_path + sound_filename_turn_left_;
+  sound_filename_turn_right_ = sound_directory_path + sound_filename_turn_right_;
   sound_filename_bgm_ = sound_directory_path + sound_filename_bgm_;
   sound_filename_obstacle_ = sound_directory_path + sound_filename_obstacle_;
   sound_filename_wakeup_ = sound_directory_path + sound_filename_wakeup_;
@@ -123,8 +123,8 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   // Check for the existence of audio files.
   makeFullPathWithFileCheck(sound_filename_avoid_);
   makeFullPathWithFileCheck(sound_filename_start_);
-  makeFullPathWithFileCheck(sound_filename_left_);
-  makeFullPathWithFileCheck(sound_filename_right_);
+  makeFullPathWithFileCheck(sound_filename_turn_left_);
+  makeFullPathWithFileCheck(sound_filename_turn_right_);
   makeFullPathWithFileCheck(sound_filename_bgm_);
   makeFullPathWithFileCheck(sound_filename_obstacle_);
   makeFullPathWithFileCheck(sound_filename_wakeup_);
@@ -285,8 +285,8 @@ void AdSoundManager::playLoopBGM(const std::string file_path)
 
 AdSoundManager::PreSoundType AdSoundManager::checkPreSoundType(void)
 {
-  if ( (pre_sound_filename_ == sound_filename_left_) ||
-    (pre_sound_filename_ == sound_filename_right_) )
+  if ( (pre_sound_filename_ == sound_filename_turn_left_) ||
+    (pre_sound_filename_ == sound_filename_turn_right_) )
   {
     return PreSoundType::TURN_LEFTRIGHT_SOUND;
   } else if ( (pre_sound_filename_ == sound_filename_obstacle_) ||
@@ -412,7 +412,7 @@ void AdSoundManager::changeSoundState(
       turn_state_ = LEFT;
       continuity_state_ = true;
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
-      playLoopVoice(sound_filename_left_, is_cut_in_voice);
+      playLoopVoice(sound_filename_turn_left_, is_cut_in_voice);
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_RIGHT:
       if ( (continuity_state_ == true) && (turn_state_ == RIGHT) ) {
@@ -422,7 +422,7 @@ void AdSoundManager::changeSoundState(
       turn_state_ = RIGHT;
       continuity_state_ = true;
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
-      playLoopVoice(sound_filename_right_, is_cut_in_voice);
+      playLoopVoice(sound_filename_turn_right_, is_cut_in_voice);
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING:
       turn_state_ = NORMAL;
@@ -440,14 +440,14 @@ void AdSoundManager::changeSoundState(
           turn_state_ = LEFT;
           continuity_state_ = true;
           pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
-          playLoopVoice(sound_filename_left_, is_cut_in_voice);
+          playLoopVoice(sound_filename_turn_left_, is_cut_in_voice);
           break;
         }
         else if (turn_signal_ == tier4_vehicle_msgs::msg::TurnSignal::RIGHT) {
           turn_state_ = RIGHT;
           continuity_state_ = true;
           pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
-          playLoopVoice(sound_filename_right_, is_cut_in_voice);
+          playLoopVoice(sound_filename_turn_right_, is_cut_in_voice);
           break;
         }
         else
@@ -465,7 +465,7 @@ void AdSoundManager::changeSoundState(
         if (turn_signal_ == tier4_vehicle_msgs::msg::TurnSignal::RIGHT) {
           turn_state_ = RIGHT;
           pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
-          playLoopVoice(sound_filename_right_, is_cut_in_voice);
+          playLoopVoice(sound_filename_turn_right_, is_cut_in_voice);
           break;
         } else if (turn_signal_ != tier4_vehicle_msgs::msg::TurnSignal::LEFT) {
           turn_state_ = NORMAL;
@@ -480,7 +480,7 @@ void AdSoundManager::changeSoundState(
         if (turn_signal_ == tier4_vehicle_msgs::msg::TurnSignal::LEFT) {
           turn_state_ = LEFT;
           pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
-          playLoopVoice(sound_filename_left_, is_cut_in_voice);
+          playLoopVoice(sound_filename_turn_left_, is_cut_in_voice);
           break;
         } else if (turn_signal_ != tier4_vehicle_msgs::msg::TurnSignal::RIGHT) {
           turn_state_ = NORMAL;

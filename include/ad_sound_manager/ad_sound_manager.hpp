@@ -132,8 +132,8 @@ private:
 
   std::string sound_filename_avoid_ = "";
   std::string sound_filename_start_ = "";
-  std::string sound_filename_left_ = "";
-  std::string sound_filename_right_ = "";
+  std::string sound_filename_turn_left_ = "";
+  std::string sound_filename_turn_right_ = "";
   std::string sound_filename_bgm_ = "";
   std::string sound_filename_obstacle_ = "";
   std::string sound_filename_wakeup_ = "";
