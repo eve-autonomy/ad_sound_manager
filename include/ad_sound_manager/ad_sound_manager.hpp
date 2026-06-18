@@ -147,8 +147,22 @@ private:
   std::string sound_filename_arrival_ = "";
   std::string sound_filename_call_ = "";
   std::string sound_filename_alert_imu_initialize_ = "";
+  std::string sound_filename_detecting_ = "";
+  std::string sound_filename_detecting_route_ = "";
+  std::string sound_filename_3m_ = "";
+  std::string sound_filename_5m_ = "";
+  std::string sound_filename_10m_ = "";
+  std::string sound_filename_15m_ = "";
+  std::string sound_filename_over_15m_ = "";
+  std::string sound_filename_left_ = "";
+  std::string sound_filename_right_ = "";
+  std::string sound_filename_front_ = "";
+  std::string sound_filename_front_left_ = "";
+  std::string sound_filename_front_right_ = "";
+  std::string sound_filename_rear_ = "";
+  std::string sound_filename_rear_left_ = "";
+  std::string sound_filename_rear_right_ = "";
   std::string pre_sound_filename_ = "";
-
   std::string sound_directory_path_ = "";
 
 protected:
