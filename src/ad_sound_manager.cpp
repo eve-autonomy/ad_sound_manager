@@ -16,8 +16,110 @@
 #include <memory>
 #include <utility>
 #include <fstream>
+#include <cmath>
+#include <cstdlib>
+#include <chrono>
+#include <thread>
+#include <atomic>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "ad_sound_manager/ad_sound_manager.hpp"
+
+namespace
+{
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kRadToDeg = 180.0 / kPi;
+constexpr std::chrono::seconds kDirectionSoundDelay{1};
+constexpr std::chrono::seconds kDistanceSoundDelay{1};
+constexpr std::chrono::seconds kPointSoundCooldown{3};
+std::atomic_bool g_stop_reason_sound_playing{false};
+
+float quatToYaw(const float qx, const float qy, const float qz, const float qw)
+{
+  const float sin_yaw_cosp = 2.0F * (qw * qz + qx * qy);
+  const float cos_yaw_cosp = 1.0F - 2.0F * (qy * qy + qz * qz);
+  return std::atan2(sin_yaw_cosp, cos_yaw_cosp);
+}
+
+void worldToVehicleRelative(
+  const float car_x, const float car_y, const float car_z,
+  const float yaw,
+  const float obj_x, const float obj_y, const float obj_z,
+  float * rel_x, float * rel_y, float * rel_z)
+{
+  const float dx = obj_x - car_x;
+  const float dy = obj_y - car_y;
+  const float dz = obj_z - car_z;
+
+  const float cos_yaw = std::cos(yaw);
+  const float sin_yaw = std::sin(yaw);
+
+  *rel_x = cos_yaw * dx + sin_yaw * dy;
+  *rel_y = -sin_yaw * dx + cos_yaw * dy;
+  *rel_z = dz;
+}
+
+std::string classifyDirection8(const float x, const float y)
+{
+  const float angle = static_cast<float>(std::atan2(y, x) * kRadToDeg);
+
+  if (angle >= -22.5F && angle <= 22.5F) {
+    return "front";
+  } else if (angle > 22.5F && angle <= 67.5F) {
+    return "front_left";
+  } else if (angle > 67.5F && angle <= 112.5F) {
+    return "left";
+  } else if (angle > 112.5F && angle <= 157.5F) {
+    return "rear_left";
+  } else if (angle > 157.5F || angle <= -157.5F) {
+    return "rear";
+  } else if (angle > -157.5F && angle <= -112.5F) {
+    return "rear_right";
+  } else if (angle > -112.5F && angle <= -67.5F) {
+    return "right";
+  }
+
+  return "front_right";
+}
+
+void playDirectionSound(const std::string & direction)
+{
+  if (direction == "front") {
+    playLoopVoice(sound_filename_front_, is_cut_in_voice);
+  } else if (direction == "front_left") {
+    playLoopVoice(sound_filename_front_left_, is_cut_in_voice);
+  } else if (direction == "left") {
+    playLoopVoice(sound_filename_left_, is_cut_in_voice);
+  } else if (direction == "rear_left") {
+    playLoopVoice(sound_filename_rear_left_, is_cut_in_voice);
+  } else if (direction == "rear") {
+    playLoopVoice(sound_filename_rear_, is_cut_in_voice);
+  } else if (direction == "rear_right") {
+    playLoopVoice(sound_filename_rear_right_, is_cut_in_voice);
+  } else if (direction == "right") {
+    playLoopVoice(sound_filename_right_, is_cut_in_voice);
+  } else {
+    playLoopVoice(sound_filename_front_right_, is_cut_in_voice);
+  }
+}
+
+void playDistanceSound(const float distance)
+{
+  if (distance < 3.0F) {
+    playLoopVoice(sound_filename_3m_, is_cut_in_voice);
+  } else if (distance <= 5.0F) {
+    playLoopVoice(sound_filename_5m_, is_cut_in_voice);
+  } else if (distance <= 10.0F) {
+    playLoopVoice(sound_filename_10m_, is_cut_in_voice);
+  } else if (distance <= 15.0F) {
+    playLoopVoice(sound_filename_15m_, is_cut_in_voice);
+  } else {
+    playLoopVoice(sound_filename_over_15m_, is_cut_in_voice);
+  }
+}
+}  // namespace
 
 namespace ad_sound_manager
 {
@@ -35,6 +137,12 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
     "/awapi/vehicle/get/status",
     rclcpp::QoS{1},
     std::bind(&AdSoundManager::callbackAwapiVehicleState, this, std::placeholders::_1)
+  );
+
+  sub_stop_reasons_ = this->create_subscription<tier4_planning_msgs::msg::StopReasonArray>(
+    "/planning/scenario_planning/status/stop_reasons",
+    rclcpp::QoS{3}.transient_local(),
+    std::bind(&AdSoundManager::callbackStopReasons, this, std::placeholders::_1)
   );
 
   sub_voice_res_ = this->create_subscription<audio_driver_msgs::msg::SoundDriverRes>(
@@ -73,6 +181,21 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   sound_filename_arrival_ = this->declare_parameter<std::string>("sound_filename_arrival", "");
   sound_filename_call_ = this->declare_parameter<std::string>("sound_filename_call", "");
   sound_filename_alert_imu_initialize_ = this->declare_parameter<std::string>("sound_filename_alert_imu_initialize", "");
+  sound_filename_3m_ = this->declare_parameter<std::string>("sound_filename_3m", "");
+  sound_filename_5m_ = this->declare_parameter<std::string>("sound_filename_5m", "");
+  sound_filename_10m_ = this->declare_parameter<std::string>("sound_filename_10m", "");
+  sound_filename_15m_ = this->declare_parameter<std::string>("sound_filename_15m", "");
+  sound_filename_15m_over_ = this->declare_parameter<std::string>("sound_filename_15m_over", "");
+  sound_filename_front_ = this->declare_parameter<std::string>("sound_filename_front", "");
+  sound_filename_front_left_ = this->declare_parameter<std::string>("sound_filename_front_left", "");
+  sound_filename_front_right_ = this->declare_parameter<std::string>("sound_filename_front_right", "");
+  sound_filename_rear_ = this->declare_parameter<std::string>("sound_filename_rear", "");
+  sound_filename_rear_left_ = this->declare_parameter<std::string>("sound_filename_rear_left", "");
+  sound_filename_rear_right_ = this->declare_parameter<std::string>("sound_filename_rear_right", "");
+  sound_filename_left_ = this->declare_parameter<std::string>("sound_filename_left", "");
+  sound_filename_right_ = this->declare_parameter<std::string>("sound_filename_right", "");
+  sound_filename_detecting_ = this->declare_parameter<std::string>("sound_filename_detecting", "");
+  sound_filename_detecting_route_ = this->declare_parameter<std::string>("sound_filename_detecting_route", "");
   sound_directory_path_ = this->declare_parameter<std::string>("sound_directory_path", "");
 
   // Check for the audio file names.
@@ -81,7 +204,27 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
     (sound_filename_turn_left_ == "") ||
     (sound_filename_turn_right_ == "") ||
     (sound_filename_bgm_ == "") ||
-    (sound_filename_obstacle_ == ""))
+    (sound_filename_obstacle_ == "") ||
+    (sound_filename_wakeup_ == "") ||
+    (sound_filename_leave_ == "") ||
+    (sound_filename_arrival_ == "") ||
+    (sound_filename_call_ == "") ||
+    (sound_filename_alert_imu_initialize_ == "") ||
+    (sound_filename_3m_ == "") || 
+    (sound_filename_5m_ == "") ||
+    (sound_filename_10m_ == "") ||
+    (sound_filename_15m_ == "") ||
+    (sound_filename_15m_over_ == "") ||
+    (sound_filename_front_ == "") ||
+    (sound_filename_front_left_ == "") ||
+    (sound_filename_front_right_ == "") ||
+    (sound_filename_rear_ == "") ||
+    (sound_filename_rear_left_ == "") ||
+    (sound_filename_rear_right_ == "") ||
+    (sound_filename_left_ == "") ||
+    (sound_filename_right_ == "") ||
+    (sound_filename_detecting_ == "") ||
+    (sound_filename_detecting_route_ == "") )
   {
     RCLCPP_ERROR(
       this->get_logger(),
@@ -119,6 +262,21 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   sound_filename_arrival_ = sound_directory_path + sound_filename_arrival_;
   sound_filename_call_ = sound_directory_path + sound_filename_call_;
   sound_filename_alert_imu_initialize_ = sound_directory_path + sound_filename_alert_imu_initialize_;
+  sound_filename_3m_ = sound_directory_path + sound_filename_3m_;
+  sound_filename_5m_ = sound_directory_path + sound_filename_5m_;
+  sound_filename_10m_ = sound_directory_path + sound_filename_10m_;
+  sound_filename_15m_ = sound_directory_path + sound_filename_15m_;
+  sound_filename_15m_over_ = sound_directory_path + sound_filename_15m_over_;
+  sound_filename_front_ = sound_directory_path + sound_filename_front_;
+  sound_filename_front_left_ = sound_directory_path + sound_filename_front_left_;
+  sound_filename_front_right_ = sound_directory_path + sound_filename_front_right_;
+  sound_filename_rear_ = sound_directory_path + sound_filename_rear_;
+  sound_filename_rear_left_ = sound_directory_path + sound_filename_rear_left_;
+  sound_filename_rear_right_ = sound_directory_path + sound_filename_rear_right_;
+  sound_filename_left_ = sound_directory_path + sound_filename_left_;
+  sound_filename_right_ = sound_directory_path + sound_filename_right_;
+  sound_filename_detecting_ = sound_directory_path + sound_filename_detecting_;
+  sound_filename_detecting_route_ = sound_directory_path + sound_filename_detecting_route_;
 
   // Check for the existence of audio files.
   makeFullPathWithFileCheck(sound_filename_avoid_);
@@ -132,6 +290,21 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   makeFullPathWithFileCheck(sound_filename_arrival_);
   makeFullPathWithFileCheck(sound_filename_call_);
   makeFullPathWithFileCheck(sound_filename_alert_imu_initialize_);
+  makeFullPathWithFileCheck(sound_filename_3m_);
+  makeFullPathWithFileCheck(sound_filename_5m_);
+  makeFullPathWithFileCheck(sound_filename_10m_);
+  makeFullPathWithFileCheck(sound_filename_15m_);
+  makeFullPathWithFileCheck(sound_filename_15m_over_);
+  makeFullPathWithFileCheck(sound_filename_front_);
+  makeFullPathWithFileCheck(sound_filename_front_left_);
+  makeFullPathWithFileCheck(sound_filename_front_right_);
+  makeFullPathWithFileCheck(sound_filename_rear_);
+  makeFullPathWithFileCheck(sound_filename_rear_left_);
+  makeFullPathWithFileCheck(sound_filename_rear_right_);
+  makeFullPathWithFileCheck(sound_filename_left_);
+  makeFullPathWithFileCheck(sound_filename_right_);
+  makeFullPathWithFileCheck(sound_filename_detecting_);
+  makeFullPathWithFileCheck(sound_filename_detecting_route_);
 }
 
 AdSoundManager::~AdSoundManager()
@@ -216,6 +389,12 @@ void AdSoundManager::callbackAwapiVehicleState(
     turn_signal_ = msg->turn_signal;
     changeSoundState(cur_service_layer_state_, cur_control_layer_state_, true);
   }
+}
+
+void AdSoundManager::callbackStopReasons(
+  const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr msg)
+{
+  last_stop_reasons_ = msg;
 }
 
 void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg)
@@ -365,6 +544,7 @@ void AdSoundManager::changeSoundState(
   const bool is_cut_in_voice =
     (pre_sound_type == PreSoundType::TURN_LEFTRIGHT_SOUND) ||
     (pre_sound_type == PreSoundType::STOP_REASON_SOUND);
+  
   switch (cur_service_layer_state_) {
     case autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE:
       continuity_state_ = false;
@@ -374,7 +554,62 @@ void AdSoundManager::changeSoundState(
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
-      playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
+      const auto logger = rclcpp::get_logger("ad_sound_manager");
+      for (const auto & stop_reason : stop_reasons) {
+        const auto & reason_name = stop_reason.reason;
+
+        for (const auto & factor : stop_reason.stop_factors) {
+          const auto & stop_pose = factor.stop_pose;
+          const auto & vehicle_pos = stop_pose.position;
+          const auto & vehicle_ori = stop_pose.orientation;
+
+          const float yaw = quatToYaw(
+            static_cast<float>(vehicle_ori.x),
+            static_cast<float>(vehicle_ori.y),
+            static_cast<float>(vehicle_ori.z),
+            static_cast<float>(vehicle_ori.w));
+
+          for (const auto & p : factor.stop_factor_points) {
+            float rel_x = 0.0F;
+            float rel_y = 0.0F;
+            float rel_z = 0.0F;
+            worldToVehicleRelative(
+              static_cast<float>(vehicle_pos.x),
+              static_cast<float>(vehicle_pos.y),
+              static_cast<float>(vehicle_pos.z),
+              yaw,
+              static_cast<float>(p.x),
+              static_cast<float>(p.y),
+              static_cast<float>(p.z),
+              &rel_x, &rel_y, &rel_z);
+
+            const std::string direction = classifyDirection8(rel_x, rel_y);
+            const float distance = std::hypot(rel_x, rel_y);
+            const float angle = std::atan2(rel_y, rel_x) * static_cast<float>(kRadToDeg);
+
+            RCLCPP_INFO(
+              logger,
+              "[stop reasons] reason=%s, %s, distance=%.3f m, angle=%.1f deg",
+              reason_name.c_str(), direction.c_str(), distance, angle);
+
+            if (reason_name == "DetectionArea") {
+              playDirectionSound(direction);
+              std::this_thread::sleep_for(kDirectionSoundDelay);
+              playDistanceSound(distance);
+              std::this_thread::sleep_for(kDistanceSoundDelay);
+              playLoopVoice(kDetectingSoundPath);
+            } else if (reason_name == "ObstacleStop") {
+              playLoopVoice(kDetectingRouteSoundPath);
+            } else {
+              RCLCPP_INFO(
+                logger,
+                "[stop reasons] no bgm for reason=%s", reason_name.c_str());
+            }
+
+            std::this_thread::sleep_for(kPointSoundCooldown);
+          }
+        }
+      }
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
