@@ -23,6 +23,7 @@
 #include "autoware_state_machine_msgs/msg/state_machine.hpp"
 #include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
 #include "tier4_api_msgs/msg/awapi_vehicle_status.hpp"
+#include "tier4_planning_msgs/msg/stop_reason_array.hpp"
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
 #include "sound_msgs/msg/sound_request.hpp"
 #include "tier4_external_api_msgs/msg/response_status.hpp"
@@ -73,6 +74,7 @@ private:
   rclcpp::Subscription<audio_driver_msgs::msg::SoundDriverRes>::SharedPtr sub_bgm_res_, sub_voice_res_;
   rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr
     sub_awapi_vehicle_state_;
+  rclcpp::Subscription<tier4_planning_msgs::msg::StopReasonArray>::SharedPtr sub_stop_reasons_;
   rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
   rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
@@ -99,6 +101,7 @@ private:
   uint16_t prev_service_layer_state_;
   uint8_t cur_control_layer_state_;
   uint8_t prev_control_layer_state_;
+  tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr last_stop_reasons_;
 
   void makeFullPathWithFileCheck(std::string & file_path);
   void callbackVoiceRes(const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg);
@@ -106,6 +109,7 @@ private:
     const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg);
   void callbackAwapiVehicleState(
     const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg);
+  void callbackStopReasons(const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr msg);
   void callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg);
 
   void publishSoundDone(void);
@@ -123,6 +127,8 @@ private:
     const bool cut_in = false, const bool is_long_delay = false);
   void playLoopNoBGM(const std::string file_path);
   void playLoopBGM(const std::string file_path);
+  void playStopReasonRelativePositionSounds(
+    const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg);
 
   PreSoundType checkPreSoundType(void);
 
