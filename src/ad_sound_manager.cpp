@@ -212,6 +212,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   cur_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
   prev_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
   is_playing_sound_initialpose_ = false;
+  last_stop_reasons_ = std::make_shared<tier4_planning_msgs::msg::StopReasonArray>();
   processed_stop_reasons_ = nullptr;
 
   std::string sound_directory_path =
