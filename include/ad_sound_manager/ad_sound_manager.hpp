@@ -102,6 +102,7 @@ private:
   uint8_t cur_control_layer_state_;
   uint8_t prev_control_layer_state_;
   tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr last_stop_reasons_;
+  tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr processed_stop_reasons_;
 
   void makeFullPathWithFileCheck(std::string & file_path);
   void callbackVoiceRes(const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg);
