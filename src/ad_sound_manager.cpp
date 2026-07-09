@@ -34,6 +34,7 @@ constexpr double kRadToDeg = 180.0 / kPi;
 constexpr std::chrono::seconds kDirectionSoundDelay{1};
 constexpr std::chrono::seconds kDistanceSoundDelay{1};
 constexpr std::chrono::seconds kPointSoundCooldown{3};
+// Distance buckets are inclusive at the upper bound.
 constexpr float kDistanceThreshold3m = 3.0F;
 constexpr float kDistanceThreshold5m = 5.0F;
 constexpr float kDistanceThreshold10m = 10.0F;
@@ -216,7 +217,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   cur_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
   prev_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
   is_playing_sound_initialpose_ = false;
-  last_stop_reasons_ = std::make_shared<tier4_planning_msgs::msg::StopReasonArray>();
+  last_stop_reasons_ = nullptr;
   processed_stop_reasons_ = nullptr;
 
   std::string sound_directory_path =
@@ -634,10 +635,7 @@ void AdSoundManager::changeSoundState(
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
-      if (
-        last_stop_reasons_ == nullptr || last_stop_reasons_->stop_reasons.empty() ||
-        processed_stop_reasons_ == last_stop_reasons_)
-      {
+      if (last_stop_reasons_ == nullptr) {
         break;
       }
 
