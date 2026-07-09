@@ -34,6 +34,10 @@ constexpr double kRadToDeg = 180.0 / kPi;
 constexpr std::chrono::seconds kDirectionSoundDelay{1};
 constexpr std::chrono::seconds kDistanceSoundDelay{1};
 constexpr std::chrono::seconds kPointSoundCooldown{3};
+constexpr float kDistanceThreshold3m = 3.0F;
+constexpr float kDistanceThreshold5m = 5.0F;
+constexpr float kDistanceThreshold10m = 10.0F;
+constexpr float kDistanceThreshold15m = 15.0F;
 std::atomic_bool g_stop_reason_sound_playing{false};
 
 float quatToYaw(const float qx, const float qy, const float qz, const float qw)
@@ -361,6 +365,10 @@ void AdSoundManager::callbackAwapiVehicleState(
 void AdSoundManager::callbackStopReasons(
   const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr msg)
 {
+  if (msg == nullptr || msg->stop_reasons.empty()) {
+    return;
+  }
+
   last_stop_reasons_ = msg;
   if (cur_service_layer_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE)
@@ -503,13 +511,13 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             playOneshotVoice(sound_filename_front_right_);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
-          if (distance < 3.0F) {
+          if (distance < kDistanceThreshold3m) {
             playOneshotVoice(sound_filename_3m_);
-          } else if (distance <= 5.0F) {
+          } else if (distance <= kDistanceThreshold5m) {
             playOneshotVoice(sound_filename_5m_);
-          } else if (distance <= 10.0F) {
+          } else if (distance <= kDistanceThreshold10m) {
             playOneshotVoice(sound_filename_10m_);
-          } else if (distance <= 15.0F) {
+          } else if (distance <= kDistanceThreshold15m) {
             playOneshotVoice(sound_filename_15m_);
           } else {
             playOneshotVoice(sound_filename_over_15m_);
@@ -626,7 +634,7 @@ void AdSoundManager::changeSoundState(
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
-      if (last_stop_reasons_ == nullptr) {
+      if (last_stop_reasons_ == nullptr || last_stop_reasons_->stop_reasons.empty()) {
         break;
       }
 
