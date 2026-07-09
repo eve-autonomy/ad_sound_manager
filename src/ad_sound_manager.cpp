@@ -365,7 +365,7 @@ void AdSoundManager::callbackAwapiVehicleState(
 void AdSoundManager::callbackStopReasons(
   const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr msg)
 {
-  if (msg == nullptr || msg->stop_reasons.empty()) {
+  if (msg->stop_reasons.empty()) {
     return;
   }
 
@@ -511,7 +511,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             playOneshotVoice(sound_filename_front_right_);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
-          if (distance < kDistanceThreshold3m) {
+          if (distance <= kDistanceThreshold3m) {
             playOneshotVoice(sound_filename_3m_);
           } else if (distance <= kDistanceThreshold5m) {
             playOneshotVoice(sound_filename_5m_);
