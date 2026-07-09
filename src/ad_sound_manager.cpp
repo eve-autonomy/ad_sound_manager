@@ -35,10 +35,10 @@ constexpr std::chrono::seconds kDirectionSoundDelay{1};
 constexpr std::chrono::seconds kDistanceSoundDelay{1};
 constexpr std::chrono::seconds kPointSoundCooldown{3};
 // Distance buckets are inclusive at the upper bound.
-constexpr float kDistanceThreshold3m = 3.0F;
-constexpr float kDistanceThreshold5m = 5.0F;
-constexpr float kDistanceThreshold10m = 10.0F;
-constexpr float kDistanceThreshold15m = 15.0F;
+constexpr float kDistanceThreshold3M = 3.0F;
+constexpr float kDistanceThreshold5M = 5.0F;
+constexpr float kDistanceThreshold10M = 10.0F;
+constexpr float kDistanceThreshold15M = 15.0F;
 std::atomic_bool g_stop_reason_sound_playing{false};
 
 float quatToYaw(const float qx, const float qy, const float qz, const float qw)
@@ -512,13 +512,14 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             playOneshotVoice(sound_filename_front_right_);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
-          if (distance <= kDistanceThreshold3m) {
+          // Preserve the existing boundary behavior: exactly 3.0 m maps to the 5 m bucket.
+          if (distance < kDistanceThreshold3M) {
             playOneshotVoice(sound_filename_3m_);
-          } else if (distance <= kDistanceThreshold5m) {
+          } else if (distance <= kDistanceThreshold5M) {
             playOneshotVoice(sound_filename_5m_);
-          } else if (distance <= kDistanceThreshold10m) {
+          } else if (distance <= kDistanceThreshold10M) {
             playOneshotVoice(sound_filename_10m_);
-          } else if (distance <= kDistanceThreshold15m) {
+          } else if (distance <= kDistanceThreshold15M) {
             playOneshotVoice(sound_filename_15m_);
           } else {
             playOneshotVoice(sound_filename_over_15m_);
