@@ -512,7 +512,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             playOneshotVoice(sound_filename_front_right_);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
-          // Preserve the existing boundary behavior: exactly 3.0 m maps to the 5 m bucket.
+          // Preserve the existing boundary behavior: 3.0 m and above map to the 5 m bucket.
           if (distance < kDistanceThreshold3M) {
             playOneshotVoice(sound_filename_3m_);
           } else if (distance <= kDistanceThreshold5M) {
