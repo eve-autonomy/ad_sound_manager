@@ -371,8 +371,7 @@ void AdSoundManager::callbackStopReasons(
 
   last_stop_reasons_ = msg;
   if (cur_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE &&
-    processed_stop_reasons_ != last_stop_reasons_)
+    autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE)
   {
     playStopReasonRelativePositionSounds(last_stop_reasons_);
   }
@@ -512,7 +511,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             playOneshotVoice(sound_filename_front_right_);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
-          if (distance <= kDistanceThreshold3m) {
+          if (distance < kDistanceThreshold3m) {
             playOneshotVoice(sound_filename_3m_);
           } else if (distance <= kDistanceThreshold5m) {
             playOneshotVoice(sound_filename_5m_);
