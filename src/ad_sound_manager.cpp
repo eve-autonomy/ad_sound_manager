@@ -371,7 +371,8 @@ void AdSoundManager::callbackStopReasons(
 
   last_stop_reasons_ = msg;
   if (cur_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE)
+    autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE &&
+    processed_stop_reasons_ != last_stop_reasons_)
   {
     playStopReasonRelativePositionSounds(last_stop_reasons_);
   }
@@ -511,7 +512,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             playOneshotVoice(sound_filename_front_right_);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
-          if (distance < kDistanceThreshold3m) {
+          if (distance <= kDistanceThreshold3m) {
             playOneshotVoice(sound_filename_3m_);
           } else if (distance <= kDistanceThreshold5m) {
             playOneshotVoice(sound_filename_5m_);
@@ -634,7 +635,10 @@ void AdSoundManager::changeSoundState(
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
-      if (last_stop_reasons_ == nullptr || last_stop_reasons_->stop_reasons.empty()) {
+      if (
+        last_stop_reasons_ == nullptr || last_stop_reasons_->stop_reasons.empty() ||
+        processed_stop_reasons_ == last_stop_reasons_)
+      {
         break;
       }
 
