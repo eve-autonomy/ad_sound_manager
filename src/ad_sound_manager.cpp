@@ -246,7 +246,9 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
   const bool is_cut_in_voice =
     (pre_sound_type == PreSoundType::TURN_LEFTRIGHT_SOUND) ||
     (pre_sound_type == PreSoundType::STOP_REASON_SOUND);
-  playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
+  if (!stop_reasons->stop_reasons.empty()) {
+    playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
+  }
 }
 
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
@@ -398,6 +400,7 @@ void AdSoundManager::changeSoundState(
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
       if (last_stop_reasons_ == nullptr) {
+        playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
         break;
       }
       playStopReasonRelativePositionSounds(last_stop_reasons_);
