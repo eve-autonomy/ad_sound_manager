@@ -242,13 +242,14 @@ void AdSoundManager::callbackStopReasons(
 void AdSoundManager::playStopReasonRelativePositionSounds(
   const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr stop_reasons)
 {
+  if (stop_reasons == nullptr || stop_reasons->stop_reasons.empty()) {
+    return;
+  }
   auto pre_sound_type = checkPreSoundType();
   const bool is_cut_in_voice =
     (pre_sound_type == PreSoundType::TURN_LEFTRIGHT_SOUND) ||
     (pre_sound_type == PreSoundType::STOP_REASON_SOUND);
-  if (!stop_reasons->stop_reasons.empty()) {
-    playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
-  }
+  playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
 }
 
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
