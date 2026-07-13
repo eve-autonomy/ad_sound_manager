@@ -49,6 +49,12 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
     std::bind(&AdSoundManager::callbackSoundRequestInitialpose, this, std::placeholders::_1)
   );
 
+  sub_stop_reasons_ = this->create_subscription<tier4_planning_msgs::msg::StopReasonArray>(
+    "/planning/scenario_planning/status/stop_reasons",
+    rclcpp::QoS{1},
+    std::bind(&AdSoundManager::callbackStopReasons, this, std::placeholders::_1)
+  );
+
   pub_voice_cmd_ = this->create_publisher<audio_driver_msgs::msg::SoundDriverCtrl>(
     "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local());
 
@@ -98,6 +104,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   turn_signal_ = tier4_vehicle_msgs::msg::TurnSignal::NONE;
   turn_state_ = NORMAL;
   continuity_state_ = false;
+  last_stop_reasons_ = nullptr;
   one_play_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
   cur_service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
   prev_service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
@@ -224,6 +231,22 @@ void AdSoundManager::callbackSoundRequestInitialpose(const sound_msgs::msg::Soun
   bool cut_in = false;
   playOneshotVoice(file_path, cut_in);
   is_playing_sound_initialpose_ = true;
+}
+
+void AdSoundManager::callbackStopReasons(
+  const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr msg)
+{
+  last_stop_reasons_ = msg;
+}
+
+void AdSoundManager::playStopReasonRelativePositionSounds(
+  const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr stop_reasons)
+{
+  auto pre_sound_type = checkPreSoundType();
+  const bool is_cut_in_voice =
+    (pre_sound_type == PreSoundType::TURN_LEFTRIGHT_SOUND) ||
+    (pre_sound_type == PreSoundType::STOP_REASON_SOUND);
+  playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
 }
 
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
@@ -374,7 +397,10 @@ void AdSoundManager::changeSoundState(
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
       continuity_state_ = false;
-      playLoopVoice(sound_filename_obstacle_, is_cut_in_voice);
+      if (last_stop_reasons_ == nullptr) {
+        break;
+      }
+      playStopReasonRelativePositionSounds(last_stop_reasons_);
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));

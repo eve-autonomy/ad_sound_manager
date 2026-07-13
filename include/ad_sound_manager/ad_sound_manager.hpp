@@ -26,6 +26,7 @@
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
 #include "sound_msgs/msg/sound_request.hpp"
 #include "tier4_external_api_msgs/msg/response_status.hpp"
+#include "tier4_planning_msgs/msg/stop_reason_array.hpp"
 
 #define VOLUME_VOICE_ALARM          (1.0)
 #define VOLUME_HIGH_BGM             (0.3)
@@ -74,6 +75,7 @@ private:
   rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr
     sub_awapi_vehicle_state_;
   rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
+  rclcpp::Subscription<tier4_planning_msgs::msg::StopReasonArray>::SharedPtr sub_stop_reasons_;
   rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
 
@@ -107,6 +109,8 @@ private:
   void callbackAwapiVehicleState(
     const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg);
   void callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg);
+  void callbackStopReasons(
+    const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr msg);
 
   void publishSoundDone(void);
 
@@ -123,6 +127,8 @@ private:
     const bool cut_in = false, const bool is_long_delay = false);
   void playLoopNoBGM(const std::string file_path);
   void playLoopBGM(const std::string file_path);
+  void playStopReasonRelativePositionSounds(
+    const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr stop_reasons);
 
   PreSoundType checkPreSoundType(void);
 
@@ -144,6 +150,9 @@ private:
   std::string pre_sound_filename_ = "";
 
   std::string sound_directory_path_ = "";
+
+  // Latest stop reasons received from the planning module.
+  tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr last_stop_reasons_;
 
 protected:
   bool is_playing_sound_initialpose_;
