@@ -111,7 +111,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
 
   sub_stop_reasons_ = this->create_subscription<tier4_planning_msgs::msg::StopReasonArray>(
     "/planning/scenario_planning/status/stop_reasons",
-    rclcpp::QoS{3}.transient_local(),
+    rclcpp::QoS{3},
     std::bind(&AdSoundManager::callbackStopReasons, this, std::placeholders::_1)
   );
 
