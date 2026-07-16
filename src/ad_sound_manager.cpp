@@ -32,7 +32,7 @@ namespace
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kRadToDeg = 180.0 / kPi;
 constexpr std::chrono::seconds kDirectionSoundDelay{1};
-constexpr std::chrono::seconds kDistanceSoundDelay{1};
+constexpr std::chrono::seconds kDistanceSoundDelay{2};
 constexpr std::chrono::seconds kPointSoundCooldown{3};
 // Distance buckets are inclusive at the upper bound.
 constexpr float kDistanceThreshold3M = 3.0F;
@@ -533,7 +533,6 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             rclcpp::get_logger("ad_sound_manager"),
             "[stop reasons] no bgm for reason=%s", reason_name.c_str());
         }
-
         std::this_thread::sleep_for(kPointSoundCooldown);
       }
     }
