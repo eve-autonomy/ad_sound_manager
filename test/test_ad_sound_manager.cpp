@@ -65,7 +65,6 @@ private:
 TEST(AdSoundManagerTest, DT_3_4_1)
 {
   rclcpp::init(0, nullptr);
-  int count = 0;
   audio_driver_msgs::msg::SoundDriverCtrl sound_driver_ctrl;
   auto node = std::make_shared<AdSoundManagerTest>();
   auto test_node = rclcpp::Node::make_shared("test_node");
@@ -86,7 +85,6 @@ TEST(AdSoundManagerTest, DT_3_4_1)
   sound_request.sound_type = "alert_imu_initialize";
   publisher->publish(sound_request);
   const auto timeout = std::chrono::seconds(5);
-  const auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < kInitialSpinAttempts - 1; i++) {
     executor.spin_some();
     std::this_thread::sleep_for(kSpinDelay);
@@ -108,7 +106,6 @@ TEST(AdSoundManagerTest, DT_3_4_1)
 TEST(AdSoundManagerTest, DT_3_8_1)
 {
   rclcpp::init(0, nullptr);
-  int count = 0;
   tier4_external_api_msgs::msg::ResponseStatus response;
   auto node = std::make_shared<AdSoundManagerTest>();
   auto test_node = rclcpp::Node::make_shared("test_node");
