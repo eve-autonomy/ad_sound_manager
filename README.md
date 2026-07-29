@@ -64,8 +64,8 @@ By continuing to play background music at a very low volume when the vehicle is 
 |:---|:----------|
 |sound_filename_avoid|File name of a voice alert for obstacle avoidance.|
 |sound_filename_start|File name of a voice alert for engaging the ego vehicle.|
-|sound_filename_left |File name of a voice alert for turning left and left-side obstacle detection.|
-|sound_filename_right|File name of a voice alert for turning right and right-side obstacle detection.|
+|sound_filename_turn_left |File name of a voice alert for turning left.|
+|sound_filename_turn_right|File name of a voice alert for turning right.|
 |sound_filename_bgm|BGM file name as the driving warning sound.|
 |sound_filename_obstacle|Warning sound file name for obstacles in the ego vehicle's path.|
 |sound_filename_wakeup|Sound file name for system startup notification.|
@@ -86,6 +86,8 @@ By continuing to play background music at a very low volume when the vehicle is 
 |sound_filename_rear|Sound file name for an obstacle directly behind the ego vehicle.|
 |sound_filename_rear_left|Sound file name for an obstacle in the rear-left direction.|
 |sound_filename_rear_right|Sound file name for an obstacle in the rear-right direction.|
+|sound_filename_left |Sound file name for an obstacle in the left-side obstacle detection.|
+|sound_filename_right|Sound file name for an obstacle in the right-side obstacle detection.|
 
 The specific values for these parameters are defined in the ad_sound package.
 
