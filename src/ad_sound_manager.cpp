@@ -171,30 +171,10 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
   // Check for the audio file names.
   if ((sound_filename_avoid_ == "") ||
     (sound_filename_start_ == "") ||
-    (sound_filename_turn_left_ == "") ||
-    (sound_filename_turn_right_ == "") ||
-    (sound_filename_bgm_ == "") ||
-    (sound_filename_obstacle_ == "") ||
-    (sound_filename_wakeup_ == "") ||
-    (sound_filename_leave_ == "") ||
-    (sound_filename_arrival_ == "") ||
-    (sound_filename_call_ == "") ||
-    (sound_filename_alert_imu_initialize_ == "") ||
-    (sound_filename_3m_ == "") || 
-    (sound_filename_5m_ == "") ||
-    (sound_filename_10m_ == "") ||
-    (sound_filename_15m_ == "") ||
-    (sound_filename_over_15m_ == "") ||
-    (sound_filename_front_ == "") ||
-    (sound_filename_front_left_ == "") ||
-    (sound_filename_front_right_ == "") ||
-    (sound_filename_rear_ == "") ||
-    (sound_filename_rear_left_ == "") ||
-    (sound_filename_rear_right_ == "") ||
     (sound_filename_left_ == "") ||
     (sound_filename_right_ == "") ||
-    (sound_filename_detecting_ == "") ||
-    (sound_filename_detecting_route_ == "") )
+    (sound_filename_bgm_ == "") ||
+    (sound_filename_obstacle_ == ""))
   {
     RCLCPP_ERROR(
       this->get_logger(),
