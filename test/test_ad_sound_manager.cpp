@@ -56,7 +56,7 @@ private:
     node_options.parameter_overrides().push_back(rclcpp::Parameter(
       "sound_directory_path",
       rclcpp::ParameterValue(
-        "/home/masahirokubota/eve/v4.4.0/pilot-auto.x1.eve/src/x1/dataset/ad_sound/wavs/ja")));
+        "/home/autoware/autoware.proj/src/x1/dataset/ad_sound/wavs/ja")));
     return node_options;
   }
 };
@@ -94,7 +94,7 @@ TEST(AdSoundManagerTest, DT_3_4_1)
   // TODO(kubota): ファイルパスがローカルに依存しているのでどうにかする。
   EXPECT_EQ(
     sound_driver_ctrl.file_path,
-    "/home/masahirokubota/eve/v4.4.0/pilot-auto.x1.eve/src/x1/dataset/ad_sound/wavs/ja/"
+    "/home/autoware/autoware.proj/src/x1/dataset/ad_sound/wavs/ja/"
     "alert_imu_initialize.wav");
   EXPECT_EQ(sound_driver_ctrl.is_loop, false);
   EXPECT_EQ(sound_driver_ctrl.loop_delay, 0.0);
@@ -142,7 +142,7 @@ TEST(AdSoundManagerTest, StopReasonsAreProcessedAfterStateUpdate)
   auto state_pub = test_node->create_publisher<autoware_state_machine_msgs::msg::StateMachine>(
     "/autoware_state_machine/state", rclcpp::QoS{3}.transient_local());
   auto stop_reason_pub = test_node->create_publisher<tier4_planning_msgs::msg::StopReasonArray>(
-    "/planning/scenario_planning/status/stop_reasons", rclcpp::QoS{3}.transient_local());
+    "/planning/scenario_planning/status/stop_reasons", rclcpp::QoS{3});
   auto voice_sub = test_node->create_subscription<audio_driver_msgs::msg::SoundDriverCtrl>(
     "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local(),
     [&voice_cmd_count, &last_voice_cmd](const audio_driver_msgs::msg::SoundDriverCtrl msg) {
@@ -158,7 +158,7 @@ TEST(AdSoundManagerTest, StopReasonsAreProcessedAfterStateUpdate)
   autoware_state_machine_msgs::msg::StateMachine state_msg;
   state_msg.service_layer_state =
     autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE;
-  state_msg.control_layer_state = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
+  state_msg.control_layer_state = autoware_state_machine_msgs::msg::StateMachine::AUTO;
   state_pub->publish(state_msg);
 
   tier4_planning_msgs::msg::StopReasonArray stop_reasons;
@@ -197,7 +197,7 @@ TEST(AdSoundManagerTest, EmptyStopReasonsAreBufferedUntilNonEmptyMessage)
   auto state_pub = test_node->create_publisher<autoware_state_machine_msgs::msg::StateMachine>(
     "/autoware_state_machine/state", rclcpp::QoS{3}.transient_local());
   auto stop_reason_pub = test_node->create_publisher<tier4_planning_msgs::msg::StopReasonArray>(
-    "/planning/scenario_planning/status/stop_reasons", rclcpp::QoS{3}.transient_local());
+    "/planning/scenario_planning/status/stop_reasons", rclcpp::QoS{3});
   auto voice_sub = test_node->create_subscription<audio_driver_msgs::msg::SoundDriverCtrl>(
     "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local(),
     [&voice_cmd_count, &last_voice_cmd](const audio_driver_msgs::msg::SoundDriverCtrl msg) {
@@ -213,7 +213,7 @@ TEST(AdSoundManagerTest, EmptyStopReasonsAreBufferedUntilNonEmptyMessage)
   autoware_state_machine_msgs::msg::StateMachine state_msg;
   state_msg.service_layer_state =
     autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE;
-  state_msg.control_layer_state = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
+  state_msg.control_layer_state = autoware_state_machine_msgs::msg::StateMachine::AUTO;
   state_pub->publish(state_msg);
 
   tier4_planning_msgs::msg::StopReasonArray empty_stop_reasons;
