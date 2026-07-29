@@ -28,7 +28,7 @@ Without this, some devices enter an idle state and clip the first sound after pl
 
 | Topic | Message | Description |
 |:---|:---|:---|
-| `/awapi/vehicle/get/status` | [`tier4_api_msgs/msg/AwapiVehicleStatus`][VehicleStatus] | Vehicle status, including turn signal state. |
+| `/awapi/vehicle/get/status` | [`tier4_api_msgs/msg/AwapiVehicleStatus`][AwapiVehicleStatus] | Vehicle status, including turn signal state. |
 | `/autoware_state_machine/state` | [`autoware_state_machine_msgs/msg/StateMachine`][AWState] | Current system state. |
 | `/sound_voice_alarm/audio_res` | [`audio_driver_msgs/msg/SoundDriverRes`][SDRes] | Voice-alarm playback completion notice. |
 
@@ -40,7 +40,7 @@ Without this, some devices enter an idle state and clip the first sound after pl
 | `/sound_voice_alarm/audio_cmd` | [`audio_driver_msgs/msg/SoundDriverCtrl`][SDCtrl] | Voice-alarm playback request. |
 | `/sound_bgm/audio_cmd` | [`audio_driver_msgs/msg/SoundDriverCtrl`][SDCtrl] | BGM playback request. |
 
-[VehicleStatus]: https://github.com/tier4/tier4_autoware_msgs/blob/tier4/universe/tier4_api_msgs/msg/AwapiVehicleStatus.msg
+[AwapiVehicleStatus]: https://github.com/tier4/tier4_autoware_msgs/blob/tier4/universe/tier4_api_msgs/msg/AwapiVehicleStatus.msg
 [AWState]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateMachine.msg
 [SoundDone]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateSoundDone.msg
 [SDRes]: https://github.com/eve-autonomy/audio_driver_msgs/blob/main/msg/SoundDriverRes.msg
