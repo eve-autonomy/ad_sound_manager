@@ -28,7 +28,7 @@ Without this, some devices enter an idle state and clip the first sound after pl
 
 | Topic | Message | Description |
 |:---|:---|:---|
-| `/awapi/vehicle/get/status` | [`tier4_api_msgs/msg/AwapiVehicleStatus`][AwapiVehicleStatus] | Vehicle status, including turn signal state. |
+| `/awapi/vehicle/get/status` | [`AwapiVehicleStatus`][AwapiVehicleStatus] | Vehicle status, including turn signal state. |
 | `/autoware_state_machine/state` | [`autoware_state_machine_msgs/msg/StateMachine`][AWState] | Current system state. |
 | `/sound_voice_alarm/audio_res` | [`audio_driver_msgs/msg/SoundDriverRes`][SDRes] | Voice-alarm playback completion notice. |
 
