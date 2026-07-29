@@ -4,6 +4,8 @@
 Every autonomous driving vehicle notifies its action to surrounding people.
 
 This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle. <br>
+It also plays stop-reason sounds based on relative position and distance when the vehicle is approaching an obstacle.
+
 This node plays sound in the following order of priority.
 1. Alert people around the ego vehicle by `voice alarm` once before the ego vehicle departs.<br> The ego vehicle will not depart until the alert is complete.
 1. Keep alerting obstacles around the ego vehicle by `voice alarm`.
@@ -28,6 +30,7 @@ By continuing to play background music at a very low volume when the vehicle is 
 - input
   - from [autoware.universe](https://github.com/autowarefoundation/autoware.universe)
     - `/awapi/vehicle/get/status` \[[tier4_api_msgs/msg/awapi_vehicle_status][VehicleStatus]\]:<br>Vehicle status. Refers to the status of the turn signal.
+    - `/planning/scenario_planning/status/stop_reasons` \[[tier4_planning_msgs/msg/StopReasonArray][StopReasonArray]\]:<br>Stop reason data used for obstacle-proximity sounds.
   - from [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
     - `/autoware_state_machine/state` \[[autoware_state_machine_msgs/msg/StateMachine][AWState]\]:<br>State of the system.
   - from sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
@@ -41,6 +44,7 @@ By continuing to play background music at a very low volume when the vehicle is 
     - `/sound_bgm/audio_cmd` \[[audio_driver_msgs/msg/SoundDriverCtrl][SDCtrl]\]:<br>BGM playback request.
 
 [VehicleStatus]: https://github.com/tier4/tier4_autoware_msgs/blob/tier4/universe/tier4_api_msgs/msg/AwapiVehicleStatus.msg
+[StopReasonArray]: https://github.com/autowarefoundation/autoware.universe/blob/main/planning/tier4_planning_msgs/msg/StopReasonArray.msg
 [AWState]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateMachine.msg
 [SoundDone]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateSoundDone.msg
 [SDRes]: https://github.com/eve-autonomy/audio_driver_msgs/blob/main/msg/SoundDriverRes.msg
@@ -60,14 +64,28 @@ By continuing to play background music at a very low volume when the vehicle is 
 |:---|:----------|
 |sound_filename_avoid|File name of a voice alert for obstacle avoidance.|
 |sound_filename_start|File name of a voice alert for engaging the ego vehicle.|
-|sound_filename_left |File name of a voice alert for turning left.|
-|sound_filename_right|File name of a voice alert for turning right.|
+|sound_filename_left |File name of a voice alert for turning left and left-side obstacle detection.|
+|sound_filename_right|File name of a voice alert for turning right and right-side obstacle detection.|
 |sound_filename_bgm|BGM file name as the driving warning sound.|
 |sound_filename_obstacle|Warning sound file name for obstacles in the ego vehicle's path.|
 |sound_filename_wakeup|Sound file name for system startup notification.|
 |sound_filename_leave|Warning sound file name for obstacles around the ego vehicle.|
 |sound_filename_arrival|Sound file name to notify the arrival of the ego vehicle.|
 |sound_filename_call|Sound file name asking for permission to engage the ego vehicle for on-demand delivery.|
+|sound_filename_alert_imu_initialize|Sound file name for the initial pose sound request.|
+|sound_filename_detecting|Sound file name played after a stop-reason announcement.|
+|sound_filename_detecting_route|Looping sound file name for obstacle-stop route announcements.|
+|sound_filename_3m|Sound file name for a detected obstacle within 3 m.|
+|sound_filename_5m|Sound file name for a detected obstacle within 5 m.|
+|sound_filename_10m|Sound file name for a detected obstacle within 10 m.|
+|sound_filename_15m|Sound file name for a detected obstacle within 15 m.|
+|sound_filename_15m_over|Sound file name for a detected obstacle over 15 m.|
+|sound_filename_front|Sound file name for an obstacle directly in front of the ego vehicle.|
+|sound_filename_front_left|Sound file name for an obstacle in the front-left direction.|
+|sound_filename_front_right|Sound file name for an obstacle in the front-right direction.|
+|sound_filename_rear|Sound file name for an obstacle directly behind the ego vehicle.|
+|sound_filename_rear_left|Sound file name for an obstacle in the rear-left direction.|
+|sound_filename_rear_right|Sound file name for an obstacle in the rear-right direction.|
 
 The specific values for these parameters are defined in the ad_sound package.
 

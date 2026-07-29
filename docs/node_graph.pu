@@ -1,6 +1,7 @@
 @startuml
 rectangle "autoware" {
   usecase "/awapi/awapi_awiv_adapter_node"
+  usecase "/planning/obstacle_stop_planner"
 }
 
 usecase "/autoware_state_machine"
@@ -9,6 +10,7 @@ usecase "/sound_voice_alarm/audio_driver"
 usecase "/sound_bgm/audio_driver"
 
 (/awapi/awapi_awiv_adapter_node) --> (/ad_sound_manager) : /awapi/vehicle/get/status
+(/planning/obstacle_stop_planner) --> (/ad_sound_manager) : /planning/scenario_planning/status/stop_reasons
 (/autoware_state_machine) -> (/ad_sound_manager) : /autoware_state_machine/state
 (/autoware_state_machine) <- (/ad_sound_manager) : /autoware_state_machine/state_sound_done
 (/ad_sound_manager) -> (/sound_voice_alarm/audio_driver) : /sound_voice_alarm/audio_cmd
