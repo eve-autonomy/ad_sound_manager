@@ -1,44 +1,44 @@
 # Autonomous Driving: Sound Manager
 
 ## Overview
-Every autonomous driving vehicle notifies its action to surrounding people.
+`ad_sound_manager` selects voice prompts and background music based on the combined Autoware and vehicle state.
 
-This node selects both a recorded voice and BGM depending on a state of whole system which combined the Autoware and a vehicle. <br>
-This node plays sound in the following order of priority.
-1. Alert people around the ego vehicle by `voice alarm` once before the ego vehicle departs.<br> The ego vehicle will not depart until the alert is complete.
-1. Keep alerting obstacles around the ego vehicle by `voice alarm`.
-1. Keep alerting obstacles in the ego vehicle's path by `voice alarm`.
-1. Notify the cargo receiver by `voice alarm` once that the ego vehicle has arrived.
-1. Keep informed by `voice alarm` that the ego vehicle is avoiding obstacles.
-1. Keep informed by `voice alarm` that the ego vehicle is turning left or right.
-1. Keep requesting an departure permit by `voice alarm` for on-demand delivery.
-1. Keep alerting people around the ego vehicle by `bgm` while driving.
-1. Notify operator by `voice alarm` once that the system has booted successfully.
-1. Keep informed by `voice alarm` that the system is being in shut down sequence.
+## Sound behavior
+Playback priority is:
 
-### Anti-idling function for audio device
+1. Notify people around the ego vehicle before departure. The vehicle will not depart until the alert finishes.
+1. Alert on obstacles around the ego vehicle.
+1. Alert on obstacles in the ego vehicle's path.
+1. Notify the cargo receiver when the ego vehicle arrives.
+1. Notify obstacle avoidance.
+1. Notify left/right turns.
+1. Request a departure permit for on-demand delivery.
+1. Play background music while driving to alert nearby people.
+1. Notify the operator when the system boots.
+1. Notify the operator during shutdown.
 
-This node provides a function to prevent idling by continuously playing extremely low volume even if there is no audio playback request.  
+## Anti-idling for audio devices
+The node keeps audio devices awake by playing very low-volume background music when no other audio is requested.
 
-If the audio device does not play audio for a while, the audio device will automatically go idle.  
-This idle state is cleared when the next audio playback starts, but the problem is that the audio cuts out immediately after it starts.  
+Without this, some devices enter an idle state and clip the first sound after playback resumes. Keeping a silent-ish BGM stream active avoids that interruption.
 
-By continuing to play background music at a very low volume when the vehicle is not moving (no background music required), other sounds can be played without the initial interruption due to idling.  
-## Input and Output
-- input
-  - from [autoware.universe](https://github.com/autowarefoundation/autoware.universe)
-    - `/awapi/vehicle/get/status` \[[tier4_api_msgs/msg/awapi_vehicle_status][VehicleStatus]\]:<br>Vehicle status. Refers to the status of the turn signal.
-  - from [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
-    - `/autoware_state_machine/state` \[[autoware_state_machine_msgs/msg/StateMachine][AWState]\]:<br>State of the system.
-  - from sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_voice_alarm/audio_res` \[[audio_driver_msgs/msg/SoundDriverRes][SDRes]\]:<br>Acknowledgement that voice alarm playback is complete.
-- output
-  - to [autoware_state_machine](https://github.com/eve-autonomy/autoware_state_machine)
-    - `/autoware_state_machine/state_sound_done` \[[autoware_state_machine_msgs/msg/StateSoundDone][SoundDone]\]:<br>Acknowledgement that sound playback is complete.
-  - to sound_voice_alarm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_voice_alarm/audio_cmd` \[[audio_driver_msgs/msg/SoundDriverCtrl][SDCtrl]\]:<br>Voice alarm playback request.
-  - to sound_bgm/[audio_driver](https://github.com/eve-autonomy/audio_driver)
-    - `/sound_bgm/audio_cmd` \[[audio_driver_msgs/msg/SoundDriverCtrl][SDCtrl]\]:<br>BGM playback request.
+## Interfaces
+
+### Subscriptions
+
+| Topic | Message | Description |
+|:---|:---|:---|
+| `/awapi/vehicle/get/status` | [`tier4_api_msgs/msg/AwapiVehicleStatus`][VehicleStatus] | Vehicle status, including turn-signal state. |
+| `/autoware_state_machine/state` | [`autoware_state_machine_msgs/msg/StateMachine`][AWState] | Current system state. |
+| `/sound_voice_alarm/audio_res` | [`audio_driver_msgs/msg/SoundDriverRes`][SDRes] | Voice-alarm playback completion notice. |
+
+### Publications
+
+| Topic | Message | Description |
+|:---|:---|:---|
+| `/autoware_state_machine/state_sound_done` | [`autoware_state_machine_msgs/msg/StateSoundDone`][SoundDone] | Sound playback completion notice. |
+| `/sound_voice_alarm/audio_cmd` | [`audio_driver_msgs/msg/SoundDriverCtrl`][SDCtrl] | Voice-alarm playback request. |
+| `/sound_bgm/audio_cmd` | [`audio_driver_msgs/msg/SoundDriverCtrl`][SDCtrl] | BGM playback request. |
 
 [VehicleStatus]: https://github.com/tier4/tier4_autoware_msgs/blob/tier4/universe/tier4_api_msgs/msg/AwapiVehicleStatus.msg
 [AWState]: https://github.com/eve-autonomy/autoware_state_machine_msgs/blob/main/msg/StateMachine.msg
@@ -46,29 +46,30 @@ By continuing to play background music at a very low volume when the vehicle is 
 [SDRes]: https://github.com/eve-autonomy/audio_driver_msgs/blob/main/msg/SoundDriverRes.msg
 [SDCtrl]: https://github.com/eve-autonomy/audio_driver_msgs/blob/main/msg/SoundDriverCtrl.msg
 
-## Node Graph
+## Node graph
 ![node graph](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/eve-autonomy/ad_sound_manager/main/docs/node_graph.pu)
 
 ## Launch arguments
-|Name|Description|
-|:---|:----------|
-|lang|Switch a set of sound by directory name. See [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details.|
 
-## Parameter description
+| Name | Description |
+|:---|:---|
+| `lang` | Selects a sound set by directory name. See [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default#extensibility-of-this-package) for details. |
 
-|Name|Description|
-|:---|:----------|
-|sound_filename_avoid|File name of a voice alert for obstacle avoidance.|
-|sound_filename_start|File name of a voice alert for engaging the ego vehicle.|
-|sound_filename_left |File name of a voice alert for turning left.|
-|sound_filename_right|File name of a voice alert for turning right.|
-|sound_filename_bgm|BGM file name as the driving warning sound.|
-|sound_filename_obstacle|Warning sound file name for obstacles in the ego vehicle's path.|
-|sound_filename_wakeup|Sound file name for system startup notification.|
-|sound_filename_leave|Warning sound file name for obstacles around the ego vehicle.|
-|sound_filename_arrival|Sound file name to notify the arrival of the ego vehicle.|
-|sound_filename_call|Sound file name asking for permission to engage the ego vehicle for on-demand delivery.|
+## Parameters
 
-The specific values for these parameters are defined in the ad_sound package.
+| Name | Description |
+|:---|:---|
+| `sound_filename_avoid` | Voice alert file for obstacle avoidance. |
+| `sound_filename_start` | Voice alert file for engaging the ego vehicle. |
+| `sound_filename_left` | Voice alert file for turning left. |
+| `sound_filename_right` | Voice alert file for turning right. |
+| `sound_filename_bgm` | BGM file used as the driving warning sound. |
+| `sound_filename_obstacle` | Warning sound file for obstacles in the ego vehicle's path. |
+| `sound_filename_wakeup` | Sound file for the system startup notification. |
+| `sound_filename_leave` | Warning sound file for obstacles around the ego vehicle. |
+| `sound_filename_arrival` | Sound file that notifies arrival. |
+| `sound_filename_call` | Sound file that requests permission for on-demand delivery departure. |
 
-If you want to use different sound, fork the [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default) repository, create a new repository.
+The actual values for these parameters are defined in the ad_sound package.
+
+To use different sounds, fork [ad_sound.default](https://github.com/eve-autonomy/ad_sound.default) and create a new repository.
