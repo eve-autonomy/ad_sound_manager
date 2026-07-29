@@ -18,51 +18,14 @@
 #include <string>
 #include "rclcpp/rclcpp.hpp"
 
-// Audio driver messages
-// For: /sound_voice_alarm/audio_cmd, /sound_bgm/audio_cmd
 #include "audio_driver_msgs/msg/sound_driver_ctrl.hpp"
-// For: /sound_voice_alarm/audio_res
 #include "audio_driver_msgs/msg/sound_driver_res.hpp"
-
-// autoware_state_machine messages (to be removed after migration)
-// For: /autoware_state_machine/state (legacy - to be removed)
-#include "autoware_state_machine_msgs/msg/state_machine.hpp"
-// For: /autoware_state_machine/state_sound_done (kept for eve_cmd_gate)
-#include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
-
-// New ADAPI v1 messages
-// For: /api/motion/state
-#include "autoware_adapi_v1_msgs/msg/motion_state.hpp"
-// For: /api/vehicle/status (turn_indicators)
 #include "autoware_adapi_v1_msgs/msg/vehicle_status.hpp"
-// For: /api/routing/state
-#include "autoware_adapi_v1_msgs/msg/route_state.hpp"
-// For: /api/localization/initialization_state
-#include "autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp"
-// For: /api/operation_mode/state
-#include "autoware_adapi_v1_msgs/msg/operation_mode_state.hpp"
-
-// go_interface messages
-// For: external system integration (voice_flg, lock_flg)
-#include "go_interface_msgs/msg/vehicle_status.hpp"
-
-// External API messages
-// For: /api/external/get/hazard_status (emergency_holding)
-#include "tier4_external_api_msgs/msg/hazard_status_stamped.hpp"
-
-// Legacy messages (to be removed after migration)
-// For: /awapi/vehicle/get/status (legacy - to be replaced by /api/vehicle/status)
-#include "tier4_api_msgs/msg/awapi_vehicle_status.hpp"
-// For: turn signal constants (legacy - to be replaced by TurnIndicators)
+#include "autoware_state_machine_msgs/msg/state_machine.hpp"
+#include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
-// For: /api/external/get/planning_factors (stop reason / approach distance)
-#include "tier4_external_api_msgs/msg/planning_factor_array.hpp"
-
-// Other messages
-// For: /localization/initial_pose/sound/response
-#include "tier4_external_api_msgs/msg/response_status.hpp"
-// For: /localization/initial_pose/sound/request
 #include "sound_msgs/msg/sound_request.hpp"
+#include "tier4_external_api_msgs/msg/response_status.hpp"
 
 #define VOLUME_VOICE_ALARM          (1.0)
 #define VOLUME_HIGH_BGM             (0.3)
@@ -85,75 +48,16 @@ public:
   virtual ~AdSoundManager();
 
 protected:
-  // ============================================================
-  // State variables accessible from test subclass
-  // ============================================================
-
-  // Store the latest status (service_layer_state and control_layer_state)
   uint16_t cur_service_layer_state_;
   uint16_t prev_service_layer_state_;
   uint8_t cur_control_layer_state_;
   uint8_t prev_control_layer_state_;
-
-  // Store the status of one-time playback waiting for a response.
   int one_play_state_;
-
-  // Sound playback flags (for stateless state determination)
-  bool is_playing_wakeup_sound_ = false;
-  bool is_playing_engage_sound_ = false;
-  bool is_playing_restart_sound_ = false;
-  bool is_playing_arrival_sound_ = false;
-
-  // True after 発進音声 completes for this route; kept true during走行 (cleared on route UNSET/UNKNOWN).
-  // planning_factors の surround_obstacle_checker による周辺近接停止へ遷移する条件に使用。
-  bool post_engage_sound_latched_ = false;
-
-  // 走行セッション（発進・再発進の案内音声完了後〜ルート・定位・非常停止でリセットまで）
-  // true: STATE_INFORM_ENGAGE / STATE_INFORM_RESTART のワンショット音声完了時のみ立てる
-  // false: 起動時、route!=SET、localization!=INITIALIZED、emergency_holding
-  bool has_started_driving_ = false;
-
-  /** 当セッションで一度でも MOVING になった（P11 INSTRUCT と P14 停止系の切り分け） */
-  bool driving_session_had_moving_ = false;
-
-  // Autoware 制御の立ち上がりで motion=STARTING が付かない（障害物前の engage 等）とき、
-  // 一度だけ STATE_INFORM_ENGAGE を選ぶ
-  bool pending_autonomous_control_inform_engage_ = false;
-
-  // For: /api/motion/state
-  // Values: UNKNOWN(0), STOPPED(1), STARTING(2), MOVING(3)
-  autoware_adapi_v1_msgs::msg::MotionState motion_state_;
-  autoware_adapi_v1_msgs::msg::MotionState prev_motion_state_;
-
-  // For: /api/vehicle/status
-  // Contains: gear, turn_indicators, hazard_lights, steering_tire_angle
-  autoware_adapi_v1_msgs::msg::VehicleStatus adapi_vehicle_status_;
-  autoware_adapi_v1_msgs::msg::VehicleStatus prev_adapi_vehicle_status_;
-
-  // For: /api/routing/state
-  // Values: UNKNOWN(0), UNSET(1), SET(2), ARRIVED(3), CHANGING(4)
-  autoware_adapi_v1_msgs::msg::RouteState route_state_;
-  autoware_adapi_v1_msgs::msg::RouteState prev_route_state_;
-
-  // For: /api/localization/initialization_state
-  // Values: UNKNOWN(0), UNINITIALIZED(1), INITIALIZING(2), INITIALIZED(3)
-  autoware_adapi_v1_msgs::msg::LocalizationInitializationState localization_state_;
-  autoware_adapi_v1_msgs::msg::LocalizationInitializationState prev_localization_state_;
-
-  // For: /api/operation_mode/state
-  // Contains: mode, is_autoware_control_enabled, is_in_transition, etc.
-  autoware_adapi_v1_msgs::msg::OperationModeState operation_mode_state_;
-  autoware_adapi_v1_msgs::msg::OperationModeState prev_operation_mode_state_;
-
-  // For: external system integration (voice_flg, lock_flg)
-  go_interface_msgs::msg::VehicleStatus go_interface_vehicle_status_;
-  go_interface_msgs::msg::VehicleStatus prev_go_interface_vehicle_status_;
-
-  // For: /api/external/get/hazard_status (emergency_holding)
-  bool emergency_holding_ = false;
-
-  // Sound playback state for localization initial pose
   bool is_playing_sound_initialpose_;
+
+  void changeSoundState(
+    const uint16_t service_layer_state, const uint8_t control_layer_state,
+    bool force);
 
 private:
   enum SoundChannel
@@ -175,129 +79,28 @@ private:
     STOP_REASON_SOUND
   };
 
-  // ============================================================
-  // Publishers
-  // ============================================================
   rclcpp::Publisher<audio_driver_msgs::msg::SoundDriverCtrl>::SharedPtr pub_bgm_cmd_, pub_voice_cmd_;
   rclcpp::Publisher<autoware_state_machine_msgs::msg::StateSoundDone>::SharedPtr pub_sound_done_;
   rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
 
-  // ============================================================
-  // Subscriptions - New ADAPI v1
-  // ============================================================
-  // For: /api/motion/state
-  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::MotionState>::SharedPtr sub_motion_state_;
-  // For: /api/vehicle/status
+  rclcpp::Subscription<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr sub_state_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>::SharedPtr sub_adapi_vehicle_status_;
-  // For: /api/routing/state
-  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::RouteState>::SharedPtr sub_route_state_;
-  // For: /api/localization/initialization_state
-  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>::SharedPtr sub_localization_state_;
-  // For: /api/operation_mode/state
-  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::OperationModeState>::SharedPtr sub_operation_mode_state_;
-
-  // ============================================================
-  // Subscriptions - go_interface
-  // ============================================================
-  // For: external system integration (voice_flg, lock_flg)
-  rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr sub_go_interface_vehicle_status_;
-
-  // ============================================================
-  // Subscriptions - System
-  // ============================================================
-  // For: /api/external/get/hazard_status (emergency_holding)
-  rclcpp::Subscription<tier4_external_api_msgs::msg::HazardStatusStamped>::SharedPtr sub_hazard_status_;
-
-  // ============================================================
-  // Subscriptions - Planning factors (AW API)
-  // ============================================================
-  rclcpp::Subscription<tier4_external_api_msgs::msg::PlanningFactorArray>::SharedPtr sub_planning_factors_;
-
-  // ============================================================
-  // Subscriptions - Other
-  // ============================================================
-  rclcpp::Subscription<audio_driver_msgs::msg::SoundDriverRes>::SharedPtr sub_bgm_res_, sub_voice_res_;
+  rclcpp::Subscription<audio_driver_msgs::msg::SoundDriverRes>::SharedPtr sub_voice_res_;
   rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
 
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
 
-  // Turn signal information from AwapiVehicleStatus.
   int32_t turn_signal_;
-
-  // Turning state information.
-  //   - during right sound playback : RIGHT
-  //   - during left sound playback  : LEFT
-  //   - other                       : NORMAL
   enum TurnState turn_state_;
-
-  // Continuos state for turning sound.
-  //   - during right/left sound playback : true
-  //   - other                            : false
   bool continuity_state_;
 
-  // /api/external/get/planning_factors はコールバック内で集約のみ（全文は保持しない）
-  double stop_approach_dist_threshold_m_ = 1.0;
-  /** 全 factor を走査するとき、これより遠い control_points[0].distance は候補から除外（旧 dist_to_stop_pose_max_th 相当）。 */
-  double planning_factors_selection_dist_max_m_ = 500.0;
-  /** 集約停止要因を一度は受け取ったか（ルート UNSET 等で false に戻す） */
-  bool planning_selected_stop_reason_initialized_ = false;
-  /** selectNearest の集約結果。早期 return 時は直前に確定した値のまま（距離は閾値跨ぎまで省略可） */
-  std::pair<std::string, double> cached_planning_selected_nearest_{"", 0.0};
-
-  bool isPlanningSelectedDistAheadOfStopThreshold(double dist_m) const;
-
   void makeFullPathWithFileCheck(std::string & file_path);
-
-  // ============================================================
-  // Callback functions - New ADAPI v1
-  // ============================================================
-  // For: /api/motion/state
-  void callbackMotionState(
-    const autoware_adapi_v1_msgs::msg::MotionState::ConstSharedPtr msg);
-  // For: /api/vehicle/status
+  void callbackStateMachine(
+    const autoware_state_machine_msgs::msg::StateMachine::ConstSharedPtr msg);
   void callbackAdapiVehicleStatus(
     const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
-  // For: /api/routing/state
-  void callbackRouteState(
-    const autoware_adapi_v1_msgs::msg::RouteState::ConstSharedPtr msg);
-  // For: /api/localization/initialization_state
-  void callbackLocalizationState(
-    const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg);
-  // For: /api/operation_mode/state
-  void callbackOperationModeState(
-    const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg);
-
-  // ============================================================
-  // Callback functions - go_interface
-  // ============================================================
-  // For: external system integration (voice_flg, lock_flg)
-  void callbackGoInterfaceVehicleStatus(
-    const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg);
-
-  // ============================================================
-  // Callback functions - System
-  // ============================================================
-  // For: /api/external/get/hazard_status (emergency_holding)
-  void callbackHazardStatus(
-    const tier4_external_api_msgs::msg::HazardStatusStamped::ConstSharedPtr msg);
-
-  // ============================================================
-  // Callback functions - Planning factors (AW API)
-  // ============================================================
-  void callbackPlanningFactors(
-    const tier4_external_api_msgs::msg::PlanningFactorArray::ConstSharedPtr msg);
-
-  // ============================================================
-  // Callback functions - Other
-  // ============================================================
   void callbackVoiceRes(const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg);
   void callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg);
-
-  // ============================================================
-  // State conversion function
-  // ============================================================
-  // Converts new ADAPI v1 states to legacy service_layer_state and control_layer_state
-  void updateAutowareStateFromTopics(void);
 
   void publishSoundDone(void);
 
@@ -317,16 +120,7 @@ private:
 
   PreSoundType checkPreSoundType(void);
 
-  void changeSoundState(
-    const uint16_t service_layer_state, const uint8_t control_layer_state,
-    bool force);
-
-  // Helper function to convert state to string for debug logging
-  std::string serviceLayerStateToString(uint16_t state) const;
-  std::string controlLayerStateToString(uint8_t state) const;
-  std::string motionStateToString(uint16_t state) const;
-  std::string routeStateToString(uint16_t state) const;
-  std::string localizationStateToString(uint16_t state) const;
+  int32_t turnIndicatorsToTurnSignal(uint8_t turn_indicators_status) const;
 
   std::string sound_filename_avoid_ = "";
   std::string sound_filename_start_ = "";
