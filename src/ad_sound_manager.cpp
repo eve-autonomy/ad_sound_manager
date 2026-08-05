@@ -475,21 +475,21 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
 
         if (reason_name == "DetectionArea") {
           if (direction == "front") {
-            playOneshotVoice(sound_filename_front_);
+            playOneshotVoice(sound_filename_front_, is_cut_in_voice);
           } else if (direction == "front_left") {
-            playOneshotVoice(sound_filename_front_left_);
+            playOneshotVoice(sound_filename_front_left_, is_cut_in_voice);
           } else if (direction == "left") {
-            playOneshotVoice(sound_filename_left_);
+            playOneshotVoice(sound_filename_left_, is_cut_in_voice);
           } else if (direction == "rear_left") {
-            playOneshotVoice(sound_filename_rear_left_);
+            playOneshotVoice(sound_filename_rear_left_, is_cut_in_voice);
           } else if (direction == "rear") {
-            playOneshotVoice(sound_filename_rear_);
+            playOneshotVoice(sound_filename_rear_, is_cut_in_voice);
           } else if (direction == "rear_right") {
-            playOneshotVoice(sound_filename_rear_right_);
+            playOneshotVoice(sound_filename_rear_right_, is_cut_in_voice);
           } else if (direction == "right") {
-            playOneshotVoice(sound_filename_right_);
+            playOneshotVoice(sound_filename_right_, is_cut_in_voice);
           } else {
-            playOneshotVoice(sound_filename_front_right_);
+            playOneshotVoice(sound_filename_front_right_, is_cut_in_voice);
           }
           std::this_thread::sleep_for(kDirectionSoundDelay);
           // Preserve the existing boundary behavior: 3.0 m and above map to the 5 m bucket.
@@ -507,7 +507,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
           std::this_thread::sleep_for(kDistanceSoundDelay);
           playOneshotVoice(sound_filename_detecting_);
         } else if (reason_name == "ObstacleStop") {
-          playLoopVoice(sound_filename_detecting_route_, is_cut_in_voice);
+          playOneshotVoice(sound_filename_detecting_route_, is_cut_in_voice);
         } else {
           RCLCPP_INFO(
             rclcpp::get_logger("ad_sound_manager"),
@@ -525,7 +525,8 @@ AdSoundManager::PreSoundType AdSoundManager::checkPreSoundType(void)
     (pre_sound_filename_ == sound_filename_turn_right_) )
   {
     return PreSoundType::TURN_LEFTRIGHT_SOUND;
-  } else if ( (pre_sound_filename_ == sound_filename_obstacle_) ||
+  } else if ( (pre_sound_filename_ == sound_filename_detecting_) ||
+    (pre_sound_filename_ == sound_filename_detecting_route_) ||
     (pre_sound_filename_ == sound_filename_leave_) ||
     (pre_sound_filename_ == sound_filename_avoid_) )
   {
