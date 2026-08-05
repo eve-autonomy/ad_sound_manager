@@ -469,7 +469,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
         const float angle = std::atan2(rel_y, rel_x) * static_cast<float>(kRadToDeg);
 
         RCLCPP_INFO(
-          rclcpp::get_logger("ad_sound_manager"),
+          this->get_logger(),
           "[stop reasons] reason=%s, %s, distance=%.3f m, angle=%.1f deg",
           reason_name.c_str(), direction.c_str(), distance, angle);
 
@@ -510,7 +510,7 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
           playOneshotVoice(sound_filename_detecting_route_, is_cut_in_voice);
         } else {
           RCLCPP_INFO(
-            rclcpp::get_logger("ad_sound_manager"),
+            this->get_logger(),
             "[stop reasons] no bgm for reason=%s", reason_name.c_str());
         }
         std::this_thread::sleep_for(kPointSoundCooldown);
