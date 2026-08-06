@@ -15,7 +15,11 @@
 #ifndef AD_SOUND_MANAGER__AD_SOUND_MANAGER_HPP_
 #define AD_SOUND_MANAGER__AD_SOUND_MANAGER_HPP_
 
+#include <chrono>
 #include <string>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include "rclcpp/rclcpp.hpp"
 
 #include "audio_driver_msgs/msg/sound_driver_ctrl.hpp"
@@ -130,6 +134,12 @@ private:
   void playLoopBGM(const std::string file_path);
   void playStopReasonRelativePositionSounds(
     const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg);
+  void requestStopReasonRelativePositionSounds(
+    const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg);
+  void playStopReasonRelativePositionSoundsWorker(
+    const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg);
+  bool waitForStopReasonPlaybackDelay(const std::chrono::seconds & delay);
+  void stopStopReasonPlayback();
 
   PreSoundType checkPreSoundType(void);
 
@@ -165,6 +175,10 @@ private:
   std::string sound_filename_rear_right_ = "";
   std::string pre_sound_filename_ = "";
   std::string sound_directory_path_ = "";
+  std::mutex stop_reason_playback_mutex_;
+  std::condition_variable stop_reason_playback_cv_;
+  bool stop_reason_playback_cancel_requested_ = false;
+  std::thread stop_reason_playback_thread_;
 
 protected:
   bool is_playing_sound_initialpose_;

@@ -20,7 +20,8 @@
 #include <cstdlib>
 #include <chrono>
 #include <thread>
-#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -39,7 +40,6 @@ constexpr float kDistanceThreshold3M = 3.0F;
 constexpr float kDistanceThreshold5M = 5.0F;
 constexpr float kDistanceThreshold10M = 10.0F;
 constexpr float kDistanceThreshold15M = 15.0F;
-std::atomic_bool g_stop_reason_sound_playing{false};
 
 float quatToYaw(const float qx, const float qy, const float qz, const float qw)
 {
@@ -261,6 +261,7 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options = rclcpp::Nod
 
 AdSoundManager::~AdSoundManager()
 {
+  stopStopReasonPlayback();
 }
 
 void AdSoundManager::makeFullPathWithFileCheck(std::string & file_path)
@@ -306,6 +307,11 @@ void AdSoundManager::callbackAutowareStateMachine(
     msg->control_layer_state);
 
   changeSoundState(msg->service_layer_state, msg->control_layer_state, false);
+    if (msg->service_layer_state !=
+      autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE)
+    {
+      stopStopReasonPlayback();
+    }
 }
 
 void AdSoundManager::callbackVoiceRes(
@@ -354,7 +360,7 @@ void AdSoundManager::callbackStopReasons(
   if (cur_service_layer_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE)
   {
-    playStopReasonRelativePositionSounds(last_stop_reasons_);
+    requestStopReasonRelativePositionSounds(last_stop_reasons_);
   }
 }
 
@@ -426,11 +432,39 @@ void AdSoundManager::playLoopBGM(const std::string file_path)
 void AdSoundManager::playStopReasonRelativePositionSounds(
   const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg)
 {
-  if (msg == nullptr || processed_stop_reasons_ == msg) {
+  requestStopReasonRelativePositionSounds(msg);
+}
+
+void AdSoundManager::requestStopReasonRelativePositionSounds(
+  const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg)
+{
+  if (msg == nullptr || msg->stop_reasons.empty()) {
     return;
   }
 
+  if (processed_stop_reasons_ == msg) {
+    return;
+  }
+
+  stopStopReasonPlayback();
   processed_stop_reasons_ = msg;
+
+  {
+    std::lock_guard<std::mutex> lock(stop_reason_playback_mutex_);
+    stop_reason_playback_cancel_requested_ = false;
+  }
+
+  stop_reason_playback_thread_ = std::thread(
+    &AdSoundManager::playStopReasonRelativePositionSoundsWorker, this, msg);
+}
+
+void AdSoundManager::playStopReasonRelativePositionSoundsWorker(
+  const tier4_planning_msgs::msg::StopReasonArray::ConstSharedPtr & msg)
+{
+  if (msg == nullptr) {
+    return;
+  }
+
   const auto pre_sound_type = checkPreSoundType();
   const bool is_cut_in_voice =
     (pre_sound_type == PreSoundType::TURN_LEFTRIGHT_SOUND) ||
@@ -491,7 +525,9 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
           } else {
             playOneshotVoice(sound_filename_front_right_, is_cut_in_voice);
           }
-          std::this_thread::sleep_for(kDirectionSoundDelay);
+          if (!waitForStopReasonPlaybackDelay(kDirectionSoundDelay)) {
+            return;
+          }
           // Preserve the existing boundary behavior: 3.0 m and above map to the 5 m bucket.
           if (distance < kDistanceThreshold3M) {
             playOneshotVoice(sound_filename_3m_);
@@ -504,7 +540,9 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
           } else {
             playOneshotVoice(sound_filename_over_15m_);
           }
-          std::this_thread::sleep_for(kDistanceSoundDelay);
+          if (!waitForStopReasonPlaybackDelay(kDistanceSoundDelay)) {
+            return;
+          }
           playOneshotVoice(sound_filename_detecting_);
         } else if (reason_name == "ObstacleStop") {
           playOneshotVoice(sound_filename_detecting_route_, is_cut_in_voice);
@@ -513,9 +551,36 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
             this->get_logger(),
             "[stop reasons] no bgm for reason=%s", reason_name.c_str());
         }
-        std::this_thread::sleep_for(kPointSoundCooldown);
+        if (!waitForStopReasonPlaybackDelay(kPointSoundCooldown)) {
+          return;
+        }
       }
     }
+  }
+}
+
+bool AdSoundManager::waitForStopReasonPlaybackDelay(const std::chrono::seconds & delay)
+{
+  std::unique_lock<std::mutex> lock(stop_reason_playback_mutex_);
+  return !stop_reason_playback_cv_.wait_for(
+    lock, delay, [this]() {return stop_reason_playback_cancel_requested_;});
+}
+
+void AdSoundManager::stopStopReasonPlayback()
+{
+  {
+    std::lock_guard<std::mutex> lock(stop_reason_playback_mutex_);
+    stop_reason_playback_cancel_requested_ = true;
+  }
+  stop_reason_playback_cv_.notify_all();
+
+  if (stop_reason_playback_thread_.joinable()) {
+    stop_reason_playback_thread_.join();
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(stop_reason_playback_mutex_);
+    stop_reason_playback_cancel_requested_ = false;
   }
 }
 
@@ -550,6 +615,7 @@ void AdSoundManager::changeSoundState(
   if (cur_service_layer_state_ !=
     autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE)
   {
+    stopStopReasonPlayback();
     processed_stop_reasons_ = nullptr;
   }
 
@@ -620,7 +686,7 @@ void AdSoundManager::changeSoundState(
         break;
       }
 
-      playStopReasonRelativePositionSounds(last_stop_reasons_);
+      requestStopReasonRelativePositionSounds(last_stop_reasons_);
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
