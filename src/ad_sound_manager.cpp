@@ -506,14 +506,15 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
           }
           std::this_thread::sleep_for(kDistanceSoundDelay);
           playOneshotVoice(sound_filename_detecting_);
+          std::this_thread::sleep_for(kPointSoundCooldown);
         } else if (reason_name == "ObstacleStop") {
-          playOneshotVoice(sound_filename_detecting_route_, is_cut_in_voice);
+          playLoopVoice(sound_filename_detecting_route_);
         } else {
           RCLCPP_INFO(
             this->get_logger(),
             "[stop reasons] no bgm for reason=%s", reason_name.c_str());
         }
-        std::this_thread::sleep_for(kPointSoundCooldown);
+        
       }
     }
   }
