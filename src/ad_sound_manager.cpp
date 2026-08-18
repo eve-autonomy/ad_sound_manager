@@ -468,8 +468,9 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
         const float distance = std::hypot(rel_x, rel_y);
         const float angle = std::atan2(rel_y, rel_x) * static_cast<float>(kRadToDeg);
 
-        RCLCPP_INFO(
+        RCLCPP_INFO_THROTTLE(
           this->get_logger(),
+          *this->get_clock(), 5000,
           "[stop reasons] reason=%s, %s, distance=%.3f m, angle=%.1f deg",
           reason_name.c_str(), direction.c_str(), distance, angle);
 
@@ -510,11 +511,11 @@ void AdSoundManager::playStopReasonRelativePositionSounds(
         } else if (reason_name == "ObstacleStop") {
           playLoopVoice(sound_filename_detecting_route_);
         } else {
-          RCLCPP_INFO(
+          RCLCPP_INFO_THROTTLE(
             this->get_logger(),
+            *this->get_clock(), 5000,
             "[stop reasons] no bgm for reason=%s", reason_name.c_str());
         }
-        
       }
     }
   }
