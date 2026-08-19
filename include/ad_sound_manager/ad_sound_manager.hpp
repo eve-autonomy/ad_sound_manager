@@ -78,6 +78,7 @@ private:
   rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
   rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
+  rclcpp::Time last_play_cmd_stamp_;
 
   // Turn signal information from AwapiVehicleStatus.
   int32_t turn_signal_;

@@ -311,6 +311,9 @@ void AdSoundManager::callbackAutowareStateMachine(
 void AdSoundManager::callbackVoiceRes(
   const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg)
 {
+  if (rclcpp::Time(msg->stamp) < last_play_cmd_stamp_) {
+    return;
+  }
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
     *this->get_clock(), 1.0,
@@ -390,6 +393,7 @@ void AdSoundManager::playOneshotVoice(const std::string file_path, const bool cu
   }
   const bool is_loop = false;
   auto cmd = initAudioCmd(sdc_msg_.CMD_PLAY, VOLUME_VOICE_ALARM, file_path, is_loop);
+  last_play_cmd_stamp_ = cmd.stamp;
   pub_voice_cmd_->publish(cmd);
   pre_sound_filename_ = file_path;
 }
@@ -405,6 +409,7 @@ void AdSoundManager::playLoopVoice(const std::string file_path,
   const double loop_delay = (is_long_delay) ? (LOOP_DELAY_VOICE_ALARM_LONG) : (LOOP_DELAY_VOICE_ALARM);
   const double start_delay = (cut_in) ? (START_DELAY_CHANGE) : (START_DELAY_NONE);
   auto cmd = initAudioCmd(sdc_msg_.CMD_PLAY, VOLUME_VOICE_ALARM, file_path, is_loop, loop_delay, start_delay);
+  last_play_cmd_stamp_ = cmd.stamp;
   pub_voice_cmd_->publish(cmd);
   pre_sound_filename_ = file_path;
 }
