@@ -31,9 +31,9 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kRadToDeg = 180.0 / kPi;
-constexpr std::chrono::seconds kDirectionSoundDelay{1};
-constexpr std::chrono::seconds kDistanceSoundDelay{2};
-constexpr std::chrono::seconds kPointSoundCooldown{3};
+constexpr std::chrono::milliseconds kDirectionSoundDelay{1500};
+constexpr std::chrono::milliseconds kDistanceSoundDelay{2000};
+constexpr std::chrono::milliseconds kPointSoundCooldown{3000};
 // Distance buckets are inclusive at the upper bound.
 constexpr float kDistanceThreshold3M = 3.0F;
 constexpr float kDistanceThreshold5M = 5.0F;
