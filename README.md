@@ -68,6 +68,7 @@ By continuing to play background music at a very low volume when the vehicle is 
 |sound_filename_leave|Warning sound file name for obstacles around the ego vehicle.|
 |sound_filename_arrival|Sound file name to notify the arrival of the ego vehicle.|
 |sound_filename_call|Sound file name asking for permission to engage the ego vehicle for on-demand delivery.|
+|sound_filename_alert_imu_initialize|Sound file name notifying the operator that IMU calibration is incomplete.|
 
 The specific values for these parameters are defined in the ad_sound package.
 
