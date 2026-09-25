@@ -15,11 +15,18 @@
 #include "ad_sound_manager/ad_sound_manager.hpp"
 #include "gtest/gtest.h"
 
+#include <audio_driver_msgs/msg/sound_driver_ctrl.hpp>
+#include <audio_driver_msgs/msg/sound_driver_res.hpp>
+#include <autoware_state_machine_msgs/msg/state_sound_done.hpp>
 #include <autoware_state_machine_msgs/msg/state_machine.hpp>
 #include <chrono>
 #include <thread>
+#include <vector>
 
+using SoundDriverCtrl = audio_driver_msgs::msg::SoundDriverCtrl;
+using SoundDriverRes = audio_driver_msgs::msg::SoundDriverRes;
 using StateMachine = autoware_state_machine_msgs::msg::StateMachine;
+using StateSoundDone = autoware_state_machine_msgs::msg::StateSoundDone;
 
 class TestableAdSoundManager : public ad_sound_manager::AdSoundManager
 {
@@ -69,6 +76,14 @@ protected:
 
     state_pub_ = test_node_->create_publisher<StateMachine>(
       "/autoware_state_machine/state", rclcpp::QoS{3}.transient_local());
+    sound_res_pub_ = test_node_->create_publisher<SoundDriverRes>(
+      "/sound_voice_alarm/audio_res", rclcpp::QoS{3}.transient_local());
+    voice_cmd_sub_ = test_node_->create_subscription<SoundDriverCtrl>(
+      "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local(),
+      [this](const SoundDriverCtrl::ConstSharedPtr msg) {voice_commands_.push_back(*msg);});
+    sound_done_sub_ = test_node_->create_subscription<StateSoundDone>(
+      "/autoware_state_machine/state_sound_done", rclcpp::QoS{3}.transient_local(),
+      [this](const StateSoundDone::ConstSharedPtr msg) {sound_done_messages_.push_back(*msg);});
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }
@@ -101,6 +116,11 @@ protected:
   std::shared_ptr<TestableAdSoundManager> node_;
   std::shared_ptr<rclcpp::Node> test_node_;
   rclcpp::Publisher<StateMachine>::SharedPtr state_pub_;
+  rclcpp::Publisher<SoundDriverRes>::SharedPtr sound_res_pub_;
+  rclcpp::Subscription<SoundDriverCtrl>::SharedPtr voice_cmd_sub_;
+  rclcpp::Subscription<StateSoundDone>::SharedPtr sound_done_sub_;
+  std::vector<SoundDriverCtrl> voice_commands_;
+  std::vector<StateSoundDone> sound_done_messages_;
 };
 
 TEST_F(AdSoundManagerStateTest, ChangeSoundStateUpdatesCurrentState)
@@ -122,4 +142,27 @@ TEST_F(AdSoundManagerStateTest, OneShotStateSetsOnePlayState)
 
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_CHECK_NODE_ALIVE);
   EXPECT_EQ(node_->getOnePlayState(), StateMachine::STATE_CHECK_NODE_ALIVE);
+}
+
+TEST_F(AdSoundManagerStateTest, ImuCalibrationStatePublishesOneShotPlaybackCommand)
+{
+  publishState(StateMachine::STATE_INFORM_IMU_CALIBRATION, StateMachine::MANUAL);
+
+  ASSERT_EQ(voice_commands_.size(), 1U);
+  EXPECT_EQ(voice_commands_.front().cmd_type, SoundDriverCtrl::CMD_PLAY);
+  EXPECT_EQ(voice_commands_.front().file_path, "/tmp/ad_sound_manager_test/test.wav");
+  EXPECT_FLOAT_EQ(voice_commands_.front().volume, VOLUME_VOICE_ALARM);
+  EXPECT_FALSE(voice_commands_.front().is_loop);
+}
+
+TEST_F(AdSoundManagerStateTest, ImuCalibrationPlaybackCompletionPublishesSoundDone)
+{
+  publishState(StateMachine::STATE_INFORM_IMU_CALIBRATION, StateMachine::MANUAL);
+
+  sound_res_pub_->publish(SoundDriverRes{});
+  spinOnce(5);
+
+  ASSERT_EQ(sound_done_messages_.size(), 1U);
+  EXPECT_EQ(sound_done_messages_.front().state, StateMachine::STATE_INFORM_IMU_CALIBRATION);
+  EXPECT_TRUE(sound_done_messages_.front().done);
 }

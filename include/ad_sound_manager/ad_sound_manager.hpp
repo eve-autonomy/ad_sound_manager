@@ -24,8 +24,6 @@
 #include "autoware_state_machine_msgs/msg/state_machine.hpp"
 #include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
-#include "sound_msgs/msg/sound_request.hpp"
-#include "tier4_external_api_msgs/msg/response_status.hpp"
 
 #define VOLUME_VOICE_ALARM          (1.0)
 #define VOLUME_HIGH_BGM             (0.3)
@@ -53,7 +51,6 @@ protected:
   uint8_t cur_control_layer_state_;
   uint8_t prev_control_layer_state_;
   int one_play_state_;
-  bool is_playing_sound_initialpose_;
 
   void changeSoundState(
     const uint16_t service_layer_state, const uint8_t control_layer_state,
@@ -81,12 +78,10 @@ private:
 
   rclcpp::Publisher<audio_driver_msgs::msg::SoundDriverCtrl>::SharedPtr pub_bgm_cmd_, pub_voice_cmd_;
   rclcpp::Publisher<autoware_state_machine_msgs::msg::StateSoundDone>::SharedPtr pub_sound_done_;
-  rclcpp::Publisher<tier4_external_api_msgs::msg::ResponseStatus>::SharedPtr pub_sound_response_initialpose_;
 
   rclcpp::Subscription<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr sub_state_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>::SharedPtr sub_adapi_vehicle_status_;
   rclcpp::Subscription<audio_driver_msgs::msg::SoundDriverRes>::SharedPtr sub_voice_res_;
-  rclcpp::Subscription<sound_msgs::msg::SoundRequest>::SharedPtr sub_sound_request_initialpose_;
 
   audio_driver_msgs::msg::SoundDriverCtrl sdc_msg_;
 
@@ -100,7 +95,6 @@ private:
   void callbackAdapiVehicleStatus(
     const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
   void callbackVoiceRes(const audio_driver_msgs::msg::SoundDriverRes::ConstSharedPtr msg);
-  void callbackSoundRequestInitialpose(const sound_msgs::msg::SoundRequest::ConstSharedPtr msg);
 
   void publishSoundDone(void);
 

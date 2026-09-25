@@ -43,12 +43,6 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options)
     std::bind(&AdSoundManager::callbackVoiceRes, this, std::placeholders::_1)
   );
 
-  sub_sound_request_initialpose_ = this->create_subscription<sound_msgs::msg::SoundRequest>(
-    "/localization/initial_pose/sound/request",
-    rclcpp::QoS{3}.transient_local(),
-    std::bind(&AdSoundManager::callbackSoundRequestInitialpose, this, std::placeholders::_1)
-  );
-
   pub_voice_cmd_ = this->create_publisher<audio_driver_msgs::msg::SoundDriverCtrl>(
     "/sound_voice_alarm/audio_cmd", rclcpp::QoS{5}.transient_local());
 
@@ -58,9 +52,6 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options)
   pub_sound_done_ =
     this->create_publisher<autoware_state_machine_msgs::msg::StateSoundDone>(
     "/autoware_state_machine/state_sound_done", rclcpp::QoS{3}.transient_local());
-
-  pub_sound_response_initialpose_ = this->create_publisher<tier4_external_api_msgs::msg::ResponseStatus>(
-    "/localization/initial_pose/sound/response", rclcpp::QoS{3}.transient_local());
 
   sound_filename_avoid_ = this->declare_parameter<std::string>("sound_filename_avoid", "");
   sound_filename_start_ = this->declare_parameter<std::string>("sound_filename_start", "");
@@ -101,7 +92,6 @@ AdSoundManager::AdSoundManager(const rclcpp::NodeOptions & options)
   prev_service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED;
   cur_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
   prev_control_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
-  is_playing_sound_initialpose_ = false;
 
   std::string sound_directory_path =
     sound_directory_path_.insert(sound_directory_path_.size(), "/");
@@ -191,18 +181,13 @@ void AdSoundManager::callbackVoiceRes(
 
   if ( (one_play_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
+    (one_play_state_ ==
+    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_IMU_CALIBRATION) ||
     (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL) ||
     (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
     (one_play_state_ == autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART) )
   {
     publishSoundDone();
-  }
-  if (is_playing_sound_initialpose_) {
-    tier4_external_api_msgs::msg::ResponseStatus response_status;
-    response_status.code = tier4_external_api_msgs::msg::ResponseStatus::SUCCESS;
-    response_status.message = "OK";
-    pub_sound_response_initialpose_->publish(response_status);
-    is_playing_sound_initialpose_ = false;
   }
 }
 
@@ -227,16 +212,6 @@ void AdSoundManager::callbackAdapiVehicleStatus(
     turn_signal_ = new_turn_signal;
     changeSoundState(cur_service_layer_state_, cur_control_layer_state_, true);
   }
-}
-
-void AdSoundManager::callbackSoundRequestInitialpose(
-  const sound_msgs::msg::SoundRequest::ConstSharedPtr msg)
-{
-  (void)msg;
-  std::string file_path = sound_filename_alert_imu_initialize_;
-  bool cut_in = false;
-  playOneshotVoice(file_path, cut_in);
-  is_playing_sound_initialpose_ = true;
 }
 
 const audio_driver_msgs::msg::SoundDriverCtrl AdSoundManager::initAudioCmd(
@@ -328,6 +303,8 @@ void AdSoundManager::changeSoundState(
     (cur_service_layer_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
     (cur_service_layer_state_ ==
+    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_IMU_CALIBRATION) ||
+    (cur_service_layer_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_CALL_PERMISSION) ||
     (cur_service_layer_state_ ==
     autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
@@ -374,6 +351,11 @@ void AdSoundManager::changeSoundState(
       continuity_state_ = false;
       one_play_state_ = cur_service_layer_state_;
       playOneshotVoice(sound_filename_wakeup_);
+      break;
+    case autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_IMU_CALIBRATION:
+      continuity_state_ = false;
+      one_play_state_ = cur_service_layer_state_;
+      playOneshotVoice(sound_filename_alert_imu_initialize_);
       break;
     case autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE:
       pub_bgm_cmd_->publish(initAudioCmd(sdc_msg_.CMD_VOLUME, VOLUME_LOW_BGM));
